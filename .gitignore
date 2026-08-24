@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+*.tsbuildinfo
+
+# Secrets & env
+.env
+.env.*
+!.env.example
+
+# Playwright artifacts (local runs; curated evidence lives in /evidence)
+test-results/
+playwright-report/
+artifacts/runs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local auth/session state
+.auth/
+artifacts/

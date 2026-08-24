@@ -1,0 +1,72 @@
+{"t":"2026-08-23T22:31:34.696Z","type":"run_start","runId":"replay-2026-08-23T22-31-34-694Z-c7087b","kind":"replay","label":"legacybank.lookup-member-balance"}
+{"t":"2026-08-23T22:31:34.699Z","type":"replay_start","capability":"legacybank.lookup-member-balance","version":"1.0.0","tenant":"base"}
+{"t":"2026-08-23T22:31:34.830Z","type":"step_start","stepId":"s1","intent":"Enter operator user ID","action":"fill"}
+{"t":"2026-08-23T22:31:34.923Z","type":"located","stepId":"s1","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:35.010Z","type":"after_step","stepId":"s1","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\002-ok-s1.png"}
+{"t":"2026-08-23T22:31:35.010Z","type":"step_ok","stepId":"s1","ms":180}
+{"t":"2026-08-23T22:31:35.011Z","type":"step_start","stepId":"s2","intent":"Enter operator user ID","action":"fill"}
+{"t":"2026-08-23T22:31:35.038Z","type":"located","stepId":"s2","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:35.107Z","type":"after_step","stepId":"s2","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\003-ok-s2.png"}
+{"t":"2026-08-23T22:31:35.108Z","type":"step_ok","stepId":"s2","ms":97}
+{"t":"2026-08-23T22:31:35.108Z","type":"step_start","stepId":"s3","intent":"Enter operator user ID","action":"fill"}
+{"t":"2026-08-23T22:31:35.132Z","type":"located","stepId":"s3","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:35.205Z","type":"after_step","stepId":"s3","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\004-ok-s3.png"}
+{"t":"2026-08-23T22:31:35.206Z","type":"step_ok","stepId":"s3","ms":98}
+{"t":"2026-08-23T22:31:35.207Z","type":"step_start","stepId":"s4","intent":"Click control","action":"click"}
+{"t":"2026-08-23T22:31:35.229Z","type":"located","stepId":"s4","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:35.956Z","type":"after_step","stepId":"s4","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\005-ok-s4.png"}
+{"t":"2026-08-23T22:31:35.957Z","type":"step_ok","stepId":"s4","ms":751}
+{"t":"2026-08-23T22:31:35.957Z","type":"step_start","stepId":"s5","intent":"Enter operator user ID","action":"fill"}
+{"t":"2026-08-23T22:31:35.980Z","type":"located","stepId":"s5","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:36.039Z","type":"after_step","stepId":"s5","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\006-ok-s5.png"}
+{"t":"2026-08-23T22:31:36.039Z","type":"step_ok","stepId":"s5","ms":82}
+{"t":"2026-08-23T22:31:36.040Z","type":"step_start","stepId":"s6","intent":"Click control","action":"click"}
+{"t":"2026-08-23T22:31:36.075Z","type":"located","stepId":"s6","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:36.820Z","type":"after_step","stepId":"s6","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\007-ok-s6.png"}
+{"t":"2026-08-23T22:31:36.821Z","type":"step_ok","stepId":"s6","ms":781}
+{"t":"2026-08-23T22:31:36.821Z","type":"step_start","stepId":"s7","intent":"Enter operator password","action":"fill"}
+{"t":"2026-08-23T22:31:36.844Z","type":"located","stepId":"s7","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:36.906Z","type":"after_step","stepId":"s7","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\008-ok-s7.png"}
+{"t":"2026-08-23T22:31:36.907Z","type":"step_ok","stepId":"s7","ms":86}
+{"t":"2026-08-23T22:31:36.908Z","type":"step_start","stepId":"s8","intent":"Click control","action":"click"}
+{"t":"2026-08-23T22:31:36.929Z","type":"located","stepId":"s8","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:37.638Z","type":"after_step","stepId":"s8","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\009-ok-s8.png"}
+{"t":"2026-08-23T22:31:37.639Z","type":"step_ok","stepId":"s8","ms":731}
+{"t":"2026-08-23T22:31:37.640Z","type":"step_start","stepId":"s9","intent":"Enter operator user ID","action":"fill"}
+{"t":"2026-08-23T22:31:37.661Z","type":"located","stepId":"s9","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-23T22:31:37.721Z","type":"after_step","stepId":"s9","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\010-ok-s9.png"}
+{"t":"2026-08-23T22:31:37.722Z","type":"step_ok","stepId":"s9","ms":82}
+{"t":"2026-08-23T22:31:37.722Z","type":"step_start","stepId":"s10","intent":"Click Sign In","action":"click"}
+{"t":"2026-08-23T22:31:37.747Z","type":"located","stepId":"s10","viaFallback":false,"fingerprintScore":1}
+{"t":"2026-08-23T22:31:38.660Z","type":"after_step","stepId":"s10","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/home.aspx"],"shot":"shots\\011-ok-s10.png"}
+{"t":"2026-08-23T22:31:38.660Z","type":"step_ok","stepId":"s10","ms":938}
+{"t":"2026-08-23T22:31:38.661Z","type":"step_start","stepId":"s11","intent":"Click Member Search","action":"click"}
+{"t":"2026-08-23T22:31:38.746Z","type":"located","stepId":"s11","viaFallback":false,"fingerprintScore":0.65}
+{"t":"2026-08-23T22:31:39.637Z","type":"recovering","stepId":"s11","via":"re-login after session expiry","frameUrlsBefore":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/login.aspx?reason=session_expired"]}
+{"t":"2026-08-23T22:31:40.480Z","type":"goto_step_page","stepId":"s11","url":"http://localhost:7788/acme/home.aspx","framePath":["content"]}
+{"t":"2026-08-23T22:31:40.481Z","type":"goto_step_page_error","stepId":"s11","message":"target frame not found"}
+{"t":"2026-08-23T22:31:41.309Z","type":"recovery_done","stepId":"s11","frameUrlsAfter":["=http://localhost:7788/acme/login.aspx?reason=session_expired"]}
+{"t":"2026-08-23T22:32:08.402Z","type":"coordinate_fallback","stepId":"s11","xy":[79,175],"attempts":["role:locator.waitFor: Timeout 9000ms exceeded.","role:locator.waitFor: Timeout 9000ms exceeded.","text:locator.waitFor: Timeout 9000ms exceeded.","coordinate:coordinate last resort"]}
+{"t":"2026-08-23T22:32:08.404Z","type":"coordinate_click_viewport","stepId":"s11","px":{"x":114,"y":157}}
+{"t":"2026-08-23T22:32:08.409Z","type":"step_ok_after_recovery","stepId":"s11"}
+{"t":"2026-08-23T22:32:08.410Z","type":"step_start","stepId":"s12","intent":"Type into member id","action":"fill"}
+{"t":"2026-08-23T22:32:26.431Z","type":"coordinate_fallback","stepId":"s12","xy":[150,60],"attempts":["name:locator.waitFor: Timeout 9000ms exceeded.","id:locator.waitFor: Timeout 9000ms exceeded.","coordinate:coordinate last resort"]}
+{"t":"2026-08-23T22:32:26.433Z","type":"coordinate_click_viewport","stepId":"s12","px":{"x":216,"y":54}}
+{"t":"2026-08-23T22:32:26.496Z","type":"after_step","stepId":"s12","topUrl":"http://localhost:7788/acme/login.aspx?reason=session_expired","frameUrls":["=http://localhost:7788/acme/login.aspx?reason=session_expired"],"shot":"shots\\013-ok-s12.png"}
+{"t":"2026-08-23T22:32:26.497Z","type":"step_ok","stepId":"s12","ms":18087}
+{"t":"2026-08-23T22:32:26.498Z","type":"step_start","stepId":"s13","intent":"Click Find Member","action":"click"}
+{"t":"2026-08-23T22:33:02.528Z","type":"coordinate_fallback","stepId":"s13","xy":[139,92],"attempts":["role:locator.waitFor: Timeout 9000ms exceeded.","role:locator.waitFor: Timeout 9000ms exceeded.","name:locator.waitFor: Timeout 9000ms exceeded.","id:locator.waitFor: Timeout 9000ms exceeded.","coordinate:coordinate last resort"]}
+{"t":"2026-08-23T22:33:02.530Z","type":"coordinate_click_viewport","stepId":"s13","px":{"x":200,"y":83}}
+{"t":"2026-08-23T22:33:02.590Z","type":"after_step","stepId":"s13","topUrl":"http://localhost:7788/acme/login.aspx?reason=session_expired","frameUrls":["=http://localhost:7788/acme/login.aspx?reason=session_expired"],"shot":"shots\\014-ok-s13.png"}
+{"t":"2026-08-23T22:33:02.590Z","type":"step_ok","stepId":"s13","ms":36092}
+{"t":"2026-08-23T22:33:02.591Z","type":"step_start","stepId":"s14","intent":"Click Select","action":"click"}
+{"t":"2026-08-23T22:33:38.614Z","type":"coordinate_fallback","stepId":"s14","xy":[23,83],"attempts":["role:locator.waitFor: Timeout 9000ms exceeded.","role:locator.waitFor: Timeout 9000ms exceeded.","text:locator.waitFor: Timeout 9000ms exceeded.","id:locator.waitFor: Timeout 9000ms exceeded.","coordinate:coordinate last resort"]}
+{"t":"2026-08-23T22:33:38.615Z","type":"coordinate_click_viewport","stepId":"s14","px":{"x":33,"y":75}}
+{"t":"2026-08-23T22:33:38.666Z","type":"after_step","stepId":"s14","topUrl":"http://localhost:7788/acme/login.aspx?reason=session_expired","frameUrls":["=http://localhost:7788/acme/login.aspx?reason=session_expired"],"shot":"shots\\015-ok-s14.png"}
+{"t":"2026-08-23T22:33:38.667Z","type":"step_ok","stepId":"s14","ms":36076}
+{"t":"2026-08-23T22:33:38.667Z","type":"step_start","stepId":"x15","intent":"Read savingsBalance: cell of column \"Balance\" in the row where Account Type = Savings","action":"extract"}
+{"t":"2026-08-23T22:33:38.674Z","type":"extract_debug","stepId":"x15","frameUrl":"http://localhost:7788/acme/login.aspx?reason=session_expired","tableCount":1}
+{"t":"2026-08-23T22:33:38.679Z","type":"extract","stepId":"x15","found":false}
+{"t":"2026-08-23T22:33:38.736Z","type":"step_failed","stepId":"x15","errorClass":"EXTRACT_FAILED","expected":"cell [Account Type=Savings] of column \"Balance\"","observed":"not found","evidenceRefs":["shots\\016-fail-extract-x15.png"]}
+{"t":"2026-08-23T22:33:38.741Z","type":"provenance_updated","status":"FAILED","degradedSteps":4}
+{"t":"2026-08-23T22:33:38.881Z","type":"replay_result","runId":"replay-2026-08-23T22-31-34-694Z-c7087b","capabilityId":"legacybank.lookup-member-balance","capabilityVersion":"1.0.0","status":"FAILED","failure":{"stepId":"x15","phase":"verify","errorClass":"EXTRACT_FAILED","expected":"cell [Account Type=Savings] of column \"Balance\"","observed":"not found","evidenceRefs":["shots\\016-fail-extract-x15.png","artifacts\\runs\\replay-2026-08-23T22-31-34-694Z-c7087b\\log.jsonl"]},"timeline":[{"stepId":"s1","intent":"Enter operator user ID","phase":"act","ok":true,"ms":115},{"stepId":"s2","intent":"Enter operator user ID","phase":"act","ok":true,"ms":43},{"stepId":"s3","intent":"Enter operator user ID","phase":"act","ok":true,"ms":39},{"stepId":"s4","intent":"Click control","phase":"act","ok":true,"ms":696},{"stepId":"s5","intent":"Enter operator user ID","phase":"act","ok":true,"ms":36},{"stepId":"s6","intent":"Click control","phase":"act","ok":true,"ms":725},{"stepId":"s7","intent":"Enter operator password","phase":"act","ok":true,"ms":37},{"stepId":"s8","intent":"Click control","phase":"act","ok":true,"ms":679},{"stepId":"s9","intent":"Enter operator user ID","phase":"act","ok":true,"ms":35},{"stepId":"s10","intent":"Click Sign In","phase":"act","ok":true,"ms":883},{"stepId":"s11","intent":"Click Member Search","phase":"recover","ok":true,"ms":2716,"recovered":true,"detail":"re-login after session expiry"},{"stepId":"s11","intent":"Click Member Search","phase":"act","ok":true,"ms":29748,"recovered":true,"degraded":true},{"stepId":"s12","intent":"Type into member id","phase":"act","ok":true,"ms":18027,"degraded":true},{"stepId":"s13","intent":"Click Find Member","phase":"act","ok":true,"ms":36037,"degraded":true},{"stepId":"s14","intent":"Click Select","phase":"act","ok":true,"ms":36027,"degraded":true}],"degradedSteps":["s11","s12","s13","s14"],"startedAt":"2026-08-23T22:31:34.198Z","finishedAt":"2026-08-23T22:33:38.881Z"}

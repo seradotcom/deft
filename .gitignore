@@ -22,3 +22,6 @@ Thumbs.db
 # Local auth/session state
 .auth/
 artifacts/
+
+# Local isolated development worktrees
+.worktrees/

@@ -1,21 +1,26 @@
 {
-  "generatedAt": "2026-08-25T01:04:22.650Z",
+  "generatedAt": "2026-08-25T05:41:17.736Z",
   "artifacts": {
-    "legacybank.lookup-member-balance": "489f1bd6bffa368b955e47ddad0a669ef22e61a68fdab83b22e3f5c4231b97f6",
+    "legacybank.lookup-member-balance": "2bd98caffe3383539bb04ab8ac504212bfcf90bc5eac19638807334c53f7cf49",
     "legacybank.open-sub-account": "25b4acbaea4980ee6aa5ecea69fad9cd9cf7e829e832e6c71128a20423ffebc2"
   },
   "scenarios": [
     {
       "dir": "evidence/discovery",
       "scenario": "discovery",
-      "runId": "discovery-2026-08-25T00-11-36-087Z-78460b",
+      "runId": "discovery-2026-08-25T05-27-04-523Z-0f7563",
       "capabilityId": "legacybank.lookup-member-balance",
       "artifactSha256": null,
       "expectedResult": "LLM run ends DONE; artifact compiled from this run",
       "actualResult": null,
       "files": [
         "log.jsonl",
-        "shots",
+        "shots/001-1-before.png",
+        "shots/002-1-after.png",
+        "shots/003-2-before.png",
+        "shots/004-2-after.png",
+        "shots/005-3-before.png",
+        "shots/006-3-after.png",
         "transcript.json"
       ]
     },
@@ -47,7 +52,7 @@
       "capabilityId": "legacybank.lookup-member-balance",
       "artifactSha256": "dc92db60f626fd3ccca0e426bca32ce3ebaaad948a514907943c9d7c4bf4ef42",
       "expectedResult": "BUSINESS_OUTCOME / MEMBER_NOT_FOUND",
-      "actualResult": "BUSINESS_OUTCOME / MEMBER_NOT_FOUND",
+      "actualResult": "BUSINESS_OUTCOME",
       "files": [
         "log.jsonl"
       ]
@@ -122,10 +127,10 @@
     {
       "dir": "evidence/hitl-approval",
       "scenario": "hitl-approval",
-      "runId": "replay-2026-08-25T00-56-47-388Z-9bfd4a",
+      "runId": "replay-2026-08-25T05-32-57-100Z-e5c010",
       "capabilityId": "legacybank.open-sub-account",
-      "artifactSha256": "1ab2b2e671771f831377b54a75b0d3765d53e2643e14dc936ed9b26eecd8e4ea",
-      "expectedResult": "operator approval via console → SUCCESS, resumedByHuman=true, human samples captured",
+      "artifactSha256": "25b4acbaea4980ee6aa5ecea69fad9cd9cf7e829e832e6c71128a20423ffebc2",
+      "expectedResult": "operator approval via console → SUCCESS, resumedByHuman=true, audit samples",
       "actualResult": "SUCCESS",
       "files": [
         "001-entry.png",
@@ -146,8 +151,20 @@
         "016-human-03.png",
         "017-human-04.png",
         "018-human-05.png",
-        "019-ok-s13.png",
-        "log.jsonl"
+        "019-human-06.png",
+        "020-human-07.png",
+        "021-human-08.png",
+        "022-human-09.png",
+        "023-human-10.png",
+        "024-human-11.png",
+        "025-human-12.png",
+        "026-human-13.png",
+        "027-human-14.png",
+        "028-human-15.png",
+        "029-human-16.png",
+        "030-ok-s13.png",
+        "log.jsonl",
+        "operator-console.png"
       ]
     }
   ]

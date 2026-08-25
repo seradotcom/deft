@@ -1,32 +1,20 @@
-{"t":"2026-08-25T00:11:36.090Z","type":"run_start","runId":"discovery-2026-08-25T00-11-36-087Z-78460b","kind":"discovery","label":"goal redacted"}
-{"t":"2026-08-25T00:12:30.287Z","type":"llm_usage","promptTokens":2270}
-{"t":"2026-08-25T00:12:30.288Z","type":"decision","step":1,"call":"type","action":{"type":"type","text":"«secret-1»","pressEnter":false,"clearBeforeTyping":true,"hint":{"elementRef":"e1"},"why":"Enter operator ID «secret-1»"}}
-{"t":"2026-08-25T00:12:30.378Z","type":"targeting_verified","step":1,"quality":"verified","primary":{"kind":"name","name":"ctl00$ContentPlaceHolder1$txtUserId"}}
-{"t":"2026-08-25T00:12:31.268Z","type":"action_result","step":1,"ok":true,"events":[],"shots":["shots\\001-1-before.png","shots\\002-1-after.png"]}
-{"t":"2026-08-25T00:12:38.578Z","type":"llm_usage","promptTokens":3783}
-{"t":"2026-08-25T00:12:38.578Z","type":"decision","step":2,"call":"type","action":{"type":"type","text":"«secret-2»","pressEnter":false,"clearBeforeTyping":true,"hint":{"elementRef":"e2"},"why":"Enter password «secret-2»"}}
-{"t":"2026-08-25T00:12:38.625Z","type":"targeting_verified","step":2,"quality":"verified","primary":{"kind":"name","name":"ctl00$ContentPlaceHolder1$txtPassword"}}
-{"t":"2026-08-25T00:12:39.518Z","type":"action_result","step":2,"ok":true,"events":[],"shots":["shots\\003-2-before.png","shots\\004-2-after.png"]}
-{"t":"2026-08-25T00:13:14.011Z","type":"llm_usage","promptTokens":5276}
-{"t":"2026-08-25T00:13:14.012Z","type":"decision","step":3,"call":"click","action":{"type":"click","hint":{"elementRef":"e3"},"why":"Click Sign In button"}}
-{"t":"2026-08-25T00:13:15.317Z","type":"targeting_verified","step":3,"quality":"verified","primary":{"kind":"role","role":"button","name":"Sign In","exact":true}}
-{"t":"2026-08-25T00:13:16.334Z","type":"action_result","step":3,"ok":true,"events":[],"shots":["shots\\005-3-before.png","shots\\006-3-after.png"]}
-{"t":"2026-08-25T00:14:04.997Z","type":"llm_usage","promptTokens":5925}
-{"t":"2026-08-25T00:14:04.997Z","type":"decision","step":4,"call":"click","action":{"type":"click","hint":{"elementRef":"e1"},"why":"Click Member Search link"}}
-{"t":"2026-08-25T00:14:05.097Z","type":"targeting_verified","step":4,"quality":"verified","primary":{"kind":"role","role":"link","name":"Member Search","exact":true}}
-{"t":"2026-08-25T00:14:06.001Z","type":"action_result","step":4,"ok":true,"events":[],"shots":["shots\\007-4-before.png","shots\\008-4-after.png"]}
-{"t":"2026-08-25T00:14:16.891Z","type":"llm_usage","promptTokens":6411}
-{"t":"2026-08-25T00:14:16.891Z","type":"decision","step":5,"call":"type","action":{"type":"type","text":"M10041","pressEnter":false,"clearBeforeTyping":true,"hint":{"elementRef":"e4"},"why":"Enter Member ID M10041"}}
-{"t":"2026-08-25T00:14:16.947Z","type":"targeting_verified","step":5,"quality":"verified","primary":{"kind":"name","name":"ctl00$ContentPlaceHolder1$txtMemberId"}}
-{"t":"2026-08-25T00:14:17.782Z","type":"action_result","step":5,"ok":true,"events":[],"shots":["shots\\009-5-before.png","shots\\010-5-after.png"]}
-{"t":"2026-08-25T00:14:25.169Z","type":"llm_usage","promptTokens":6900}
-{"t":"2026-08-25T00:14:25.170Z","type":"decision","step":6,"call":"click","action":{"type":"click","hint":{"elementRef":"e5"},"why":"Click Find Member button"}}
-{"t":"2026-08-25T00:14:26.450Z","type":"targeting_verified","step":6,"quality":"verified","primary":{"kind":"role","role":"button","name":"Find Member","exact":true}}
-{"t":"2026-08-25T00:14:27.369Z","type":"action_result","step":6,"ok":true,"events":[],"shots":["shots\\011-6-before.png","shots\\012-6-after.png"]}
-{"t":"2026-08-25T00:14:34.823Z","type":"llm_usage","promptTokens":7428}
-{"t":"2026-08-25T00:14:34.824Z","type":"decision","step":7,"call":"click","action":{"type":"click","hint":{"elementRef":"e4"},"why":"Select member M10041"}}
-{"t":"2026-08-25T00:14:34.914Z","type":"targeting_verified","step":7,"quality":"verified","primary":{"kind":"role","role":"link","name":"Select","exact":true}}
-{"t":"2026-08-25T00:14:35.844Z","type":"action_result","step":7,"ok":true,"events":[],"shots":["shots\\013-7-before.png","shots\\014-7-after.png"]}
-{"t":"2026-08-25T00:14:50.668Z","type":"llm_usage","promptTokens":8327}
-{"t":"2026-08-25T00:14:50.668Z","type":"decision","step":8,"call":"done","action":{"type":"done","summary":"Successfully logged in as «secret-1», searched for member M10041 (Jane Dougherty), and retrieved the balances of their Savings accounts: «40f781f6» (Account 0001234567), «e8abb178» (Account 00093201213), and «e8abb178» (Account 00094557201).","outputs":{"savingsBalance_0001234567":"«40f781f6»","savingsBalance_00093201213":"«e8abb178»","savingsBalance_00094557201":"«e8abb178»"}}}
-{"t":"2026-08-25T00:14:51.771Z","type":"run_end","endState":"DONE","steps":7,"summary":"Successfully logged in as «secret-1», searched for member M10041 (Jane Dougherty), and retrieved the balances of their Savings accounts: «40f781f6» (Account 0001234567), «e8abb178» (Account 00093201213), and «e8abb178» (Account 00094557201)."}
+{"t":"2026-08-25T05:27:04.526Z","type":"run_start","runId":"discovery-2026-08-25T05-27-04-523Z-0f7563","kind":"discovery","label":"goal redacted"}
+{"t":"2026-08-25T05:27:05.294Z","type":"auth_step","intent":"Enter operator user ID","descriptor":{"kind":"name","name":"ctl00$ContentPlaceHolder1$txtUserId"}}
+{"t":"2026-08-25T05:27:05.338Z","type":"auth_step","intent":"Enter operator password","descriptor":{"kind":"name","name":"ctl00$ContentPlaceHolder1$txtPassword"}}
+{"t":"2026-08-25T05:27:06.614Z","type":"auth_step","intent":"Submit credentials (engine-side)"}
+{"t":"2026-08-25T05:27:07.402Z","type":"auth_complete","steps":3}
+{"t":"2026-08-25T05:27:11.318Z","type":"llm_usage","promptTokens":2553}
+{"t":"2026-08-25T05:27:11.319Z","type":"decision","step":1,"call":"click","action":{"type":"click","hint":{"elementRef":"e1"},"why":"Navigate to Member Search page"}}
+{"t":"2026-08-25T05:27:11.408Z","type":"targeting_verified","step":1,"quality":"verified","primary":{"kind":"role","role":"link","name":"Member Search","exact":true}}
+{"t":"2026-08-25T05:27:12.311Z","type":"action_result","step":1,"ok":true,"events":[],"shots":["shots\\001-1-before.png","shots\\002-1-after.png"]}
+{"t":"2026-08-25T05:27:15.193Z","type":"llm_usage","promptTokens":4108}
+{"t":"2026-08-25T05:27:15.193Z","type":"decision","step":2,"call":"type","action":{"type":"type","text":"M10041","pressEnter":true,"clearBeforeTyping":true,"hint":{"elementRef":"e4"},"why":"Enter Member ID M10041 and submit search"}}
+{"t":"2026-08-25T05:27:15.249Z","type":"targeting_verified","step":2,"quality":"verified","primary":{"kind":"name","name":"ctl00$ContentPlaceHolder1$txtMemberId"}}
+{"t":"2026-08-25T05:27:16.255Z","type":"action_result","step":2,"ok":true,"events":[],"shots":["shots\\003-2-before.png","shots\\004-2-after.png"]}
+{"t":"2026-08-25T05:27:18.984Z","type":"llm_usage","promptTokens":5817}
+{"t":"2026-08-25T05:27:18.985Z","type":"decision","step":3,"call":"click","action":{"type":"click","hint":{"elementRef":"e4"},"why":"Select member M10041 to view account details"}}
+{"t":"2026-08-25T05:27:19.054Z","type":"targeting_verified","step":3,"quality":"verified","primary":{"kind":"role","role":"link","name":"Select","exact":true}}
+{"t":"2026-08-25T05:27:19.960Z","type":"action_result","step":3,"ok":true,"events":[],"shots":["shots\\005-3-before.png","shots\\006-3-after.png"]}
+{"t":"2026-08-25T05:27:22.785Z","type":"llm_usage","promptTokens":6584}
+{"t":"2026-08-25T05:27:22.785Z","type":"decision","step":4,"call":"done","action":{"type":"done","summary":"Successfully looked up member M10041 (Jane Dougherty) and retrieved the Savings account balance of «40f781f6».","outputs":{"savingsBalance":"«40f781f6»"}}}
+{"t":"2026-08-25T05:27:23.850Z","type":"run_end","endState":"DONE","steps":3,"summary":"Successfully looked up member M10041 (Jane Dougherty) and retrieved the Savings account balance of «40f781f6»."}

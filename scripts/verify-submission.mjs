@@ -45,7 +45,7 @@ lookup.provenance.discoveredFromRunId === discRunId
 const expected = {
   'discovery': () => true, // terminal state checked separately (DONE)
   'replay-success': (s) => s.actualResult === 'SUCCESS',
-  'replay-business-outcome': (s) => s.actualResult.includes('MEMBER_NOT_FOUND'),
+  'replay-business-outcome': (s) => s.actualResult === 'BUSINESS_OUTCOME',
   'replay-cross-tenant': (s) => s.actualResult === 'SUCCESS',
   'replay-session-recovery': (s) => s.actualResult === 'SUCCESS',
   'risky-gating': (s) => s.actualResult === 'FAILED' && s.actualResult !== null,
@@ -122,4 +122,5 @@ if (failures === 0) {
   console.log(`Submission evidence integrity: FAIL (${failures} problem(s))`);
   process.exit(1);
 }
+
 

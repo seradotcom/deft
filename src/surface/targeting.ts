@@ -90,9 +90,10 @@ export async function buildTargetDescriptor(
 
   const coordinate: LocatorSpec = {
     kind: 'coordinate',
-    // FRAME-LOCAL pixels of the control's center — replay translates through
+    // FRAME-LOCAL pixels of the control's center - replay translates through
     // the frame's viewport origin. Grid spaces mixed with frame offsets proved
     // ambiguous (see knowledge log), so we keep raw local pixels.
+    space: 'frame-px',
     x: facts.rect.x + Math.floor(facts.rect.width / 2),
     y: facts.rect.y + Math.floor(facts.rect.height / 2),
     note: 'last resort; frame-local pixel center at record time',

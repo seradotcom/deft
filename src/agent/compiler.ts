@@ -78,7 +78,7 @@ export function compileCapability(
         intent: `${intentOf(rs, isLogin)} (degraded: coordinate targeting)`,
         action: mapAction(actionType),
         target: {
-          primary: { kind: 'coordinate', x: hint.x, y: hint.y, note: 'viewport-grid fallback; no verified descriptor at record time' },
+          primary: { kind: 'coordinate', space: 'viewport-grid', x: hint.x, y: hint.y, note: 'viewport-grid fallback; no verified descriptor at record time' },
           fallbacks: [],
           scope: { framePath: [] },
           quality: 'coordinate-only',
@@ -89,6 +89,7 @@ export function compileCapability(
         selectOptionText: rs.action.type === 'select' ? rs.action.optionText : undefined,
         recoverableErrors: [],
         riskClass: riskyHeuristic(rs) ? 'risky' : 'safe',
+        idempotent: !riskyHeuristic(rs),
       });
       continue;
     }
@@ -108,6 +109,7 @@ export function compileCapability(
           ] as Step['recoverableErrors'])
         : [],
       riskClass: riskyHeuristic(rs) ? 'risky' : 'safe',
+      idempotent: !riskyHeuristic(rs),
     };
 
     if (rs.action.type === 'type') {
@@ -120,6 +122,7 @@ export function compileCapability(
     steps.push(step);
 
     // Enter-terminated typing is TWO actions at replay time: fill + press.
+    // The press SUBMITS the form — a non-idempotent side effect.
     if (rs.action.type === 'type' && rs.action.pressEnter) {
       seq += 1;
       steps.push({
@@ -131,6 +134,7 @@ export function compileCapability(
         pageUrl: step.pageUrl,
         recoverableErrors: (step.recoverableErrors ?? []) as Step['recoverableErrors'],
         riskClass: 'safe',
+        idempotent: false,
       });
     }
   }
@@ -152,13 +156,14 @@ export function compileCapability(
       intent: `Read ${key}: cell of column "${binding.colHeader}" in the row where ${binding.rowHeader} = ${rowValueTemplate}`,
       action: 'extract',
       outputKey: key,
-      pageUrl: templateUrl(lastUrl, opts),
+      pageUrl: templateUrl(binding.frameUrl ?? lastUrl, opts),
       extract: {
         strategy: 'tableCell',
         scope: { framePath: binding.framePath ?? [] },
         rowMatch: { columnHeader: binding.rowHeader, equalsTemplate: rowValueTemplate },
         columnHeader: binding.colHeader,
       },
+      idempotent: true,
       recoverableErrors: [
         { chainRef: 'relogin', description: 're-login after session expiry' },
       ] as Step['recoverableErrors'],
@@ -207,8 +212,11 @@ export function compileCapability(
     recoveryChains: {
       relogin: [
         { action: 'navigate', urlTemplate: opts.entryUrlTemplate },
-        ...credentialChain(opts),
-        { action: 'gotoStepPage' },
+        // Prefer authPhase descriptors (engine-side, always present when auth
+        // is deterministic) over legacy loginTargets from the transcript.
+        ...(opts.loginTargets?.userField
+          ? credentialChain(opts)
+          : authPhaseChain(result)),
         { action: 'wait', durationMs: 800 },
       ],
     },
@@ -243,7 +251,47 @@ export function compileCapability(
     },
   };
 
+  // Deterministic auth phase: recorded by the ENGINE pre-discovery, templated
+  // to env bindings — credential values never existed in model context.
+  if (result.authSteps && result.authSteps.length > 0) {
+    const authPhaseSteps: Step[] = result.authSteps.map((rs, i) => ({
+      id: `auth${i + 1}`,
+      intent:
+        rs.action.type === 'type'
+          ? /pass/i.test(`${rs.facts?.typeAttr ?? ''} ${rs.facts?.id ?? ''}`)
+            ? 'Enter operator password (engine-side)'
+            : 'Enter operator user ID (engine-side)'
+          : 'Submit credentials (engine-side)',
+      action: rs.action.type === 'type' ? 'fill' : 'click',
+      target: rs.descriptor,
+      valueTemplate: rs.action.type === 'type' ? (rs.action as { text: string }).text : undefined,
+      recoverableErrors: [],
+      riskClass: 'safe',
+      idempotent: true,
+    }));
+    (artifact as { authPhase?: { steps: Step[] } }).authPhase = { steps: authPhaseSteps };
+  }
+
   return CapabilityArtifactSchema.parse(artifact);
+}
+
+/** Recovery chain credential actions from the authPhase's verified descriptors. */
+function authPhaseChain(result: DiscoveryResult): Array<
+  | { action: 'fill'; target: TargetDescriptor; valueTemplate: string }
+  | { action: 'click'; target: TargetDescriptor }
+> {
+  const steps = result.authSteps ?? [];
+  const out: Array<{ action: 'fill'; target: TargetDescriptor; valueTemplate: string } | { action: 'click'; target: TargetDescriptor }> = [];
+  for (const s of steps) {
+    if (!s.descriptor) continue;
+    if (s.action.type === 'type') {
+      const isPass = /pass/i.test(`${s.facts?.typeAttr ?? ''} ${s.facts?.id ?? ''}`);
+      out.push({ action: 'fill', target: s.descriptor, valueTemplate: isPass ? '{{env.password}}' : '{{env.username}}' });
+    } else if (s.action.type === 'click') {
+      out.push({ action: 'click', target: s.descriptor });
+    }
+  }
+  return out;
 }
 
 function credentialChain(opts: CompileOptions): Array<
@@ -379,3 +427,7 @@ function redactDescriptorValues(d: TargetDescriptor): TargetDescriptor {
   delete (clone as Record<string, unknown>).capturedValue;
   return clone;
 }
+
+
+
+

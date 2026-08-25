@@ -28,7 +28,7 @@ function gridToPxViewport(x999: number, y999: number): { x: number; y: number } 
     y: Math.max(0, Math.min(899, Math.round((y999 / 999) * 899))),
   };
 }
-import { openRunContext, runCheck, extractStepOutput, applyVariant, validateInputs, templateCtx, globMatch, errorClassOf, classifyPhase, shortMsg, describeCheck, describeExtract, matchBusinessOutcome, type Ctx, type ReplayOptions } from './support.js';
+import { openRunContext, runCheck, extractStepOutput, applyVariant, validateInputs, validateOutputs, resolveEnvironmentBindings, templateCtx, globMatch, errorClassOf, classifyPhase, shortMsg, describeCheck, describeExtract, matchBusinessOutcome, type Ctx, type ReplayOptions } from './support.js';
 
 export async function replayCapability(
   artifactLike: unknown,
@@ -41,6 +41,13 @@ export async function replayCapability(
   }
   const artifact = applyVariant(parsed.data, opts.tenantId);
   validateInputs(artifact, opts.inputs);
+
+  // Environment bindings resolve INSIDE the engine from the runtime env �
+  // secrets are engine-scope values, never model context.
+  opts.env = {
+    ...resolveEnvironmentBindings(artifact, opts.runtimeEnv ?? process.env),
+    ...(opts.env ?? {}),
+  };
 
   const ctx = await openRunContext(artifact, opts);
   let status: ReplayResult['status'] = 'SUCCESS';
@@ -56,6 +63,22 @@ export async function replayCapability(
     } else {
       await ctx.driver.act({ type: 'navigate', url: entryUrl });
       await shot(ctx, 'entry');
+    }
+
+    if (status === 'SUCCESS') {
+      // Deterministic auth phase — engine-executed, policy-checked, evidence-
+      // logged. Credential values resolve from env bindings INSIDE the engine;
+      // the model never sees them (there is no model here at all).
+      let authIndex = 0;
+      for (const authStep of artifact.authPhase?.steps ?? []) {
+        const outcome = await runStep(ctx, artifact, opts, authStep, authIndex, { disableRecovery: true });
+        authIndex += 1;
+        if (outcome.kind === 'failure') {
+          status = 'FAILED';
+          failure = { ...outcome.failure, errorClass: 'AUTH_FAILED' };
+          break;
+        }
+      }
     }
 
     if (status === 'SUCCESS') {
@@ -96,42 +119,55 @@ export async function replayCapability(
       }
     }
 
-    // Provenance feedback: artifacts learn from their replays. The result is
-    // cryptographically tied to the exact artifact bytes via sha256.
+    // Validation ledger: the artifact is IMMUTABLE — runtime history lives in
+    // an append-only sidecar, cryptographically tied to the exact bytes.
+    // Approval state is DERIVED from the ledger, never written into the
+    // definition (no byte drift between runs of the same capability).
     try {
       const cryptoMod = await import('node:crypto');
       const fsMod = await import('node:fs');
       const storePath = process.env.DEFT_CAPABILITIES_DIR ?? 'capabilities';
       const file = `${storePath}/${artifact.metadata.id}.json`;
       if (fsMod.existsSync(file)) {
-        const artifactBytes = fsMod.readFileSync(file);
-        const artifactSha256 = cryptoMod.createHash('sha256').update(artifactBytes).digest('hex');
-        const onDisk = JSON.parse(artifactBytes.toString('utf8')) as CapabilityArtifact;
-        onDisk.provenance.validation.lastReplayAt = new Date().toISOString();
-        onDisk.provenance.validation.lastReplayStatus = status;
-        if (status === 'SUCCESS' || status === 'BUSINESS_OUTCOME') {
-          onDisk.provenance.validation.replaySuccessCount += 1;
-          // Degraded success is NOT clean success: coordinate-resolved steps
-          // mean the semantic targeting aged — review, don't promote.
-          if (ctx.degradedSteps.length > 0) {
-            onDisk.metadata.status = 'needs-review';
-          } else if (onDisk.metadata.status === 'draft' && onDisk.provenance.validation.replaySuccessCount >= 2) {
-            onDisk.metadata.status = 'approved';
-          }
-        } else {
-          onDisk.provenance.validation.replayFailureCount += 1;
-          if (onDisk.provenance.validation.replayFailureCount >= 3) {
-            onDisk.metadata.status = 'needs-review';
-          }
-        }
-        fsMod.writeFileSync(file, JSON.stringify(onDisk, null, 2));
-        ctx.evidence.write({ type: 'provenance_updated', status, artifactSha256, degradedSteps: ctx.degradedSteps.length });
+        const artifactSha256 = cryptoMod.createHash('sha256').update(fsMod.readFileSync(file)).digest('hex');
+        const ledgerPath = `${storePath}/${artifact.metadata.id}.validation.jsonl`;
+        fsMod.appendFileSync(
+          ledgerPath,
+          JSON.stringify({
+            at: new Date().toISOString(),
+            runId: ctx.evidence.runId,
+            tenant: opts.tenantId ?? 'base',
+            status,
+            degradedSteps: ctx.degradedSteps,
+            escalated: ctx.escalation?.resumedByHuman ?? false,
+            artifactSha256,
+          }) + '\n'
+        );
+        ctx.evidence.write({ type: 'ledger_appended', status, artifactSha256, degradedSteps: ctx.degradedSteps.length });
       }
     } catch {
-      /* provenance update is best-effort */
+      /* ledger append is best-effort */
     }
   } finally {
     await ctx.driver.close().catch(() => undefined);
+  }
+
+  // Output contract: SUCCESS only if the extracted values satisfy the
+  // artifact's declared output schema.
+  if (status === 'SUCCESS') {
+    try {
+      validateOutputs(artifact, ctx.outputs);
+    } catch (err) {
+      status = 'FAILED';
+      failure = {
+        stepId: 'outputs',
+        phase: 'verify',
+        errorClass: 'OUTPUT_CONTRACT_VIOLATION',
+        expected: 'outputs matching artifact.outputs schema',
+        observed: (err as Error).message,
+        evidenceRefs: [],
+      };
+    }
   }
 
   const result: ReplayResult = {
@@ -169,7 +205,8 @@ async function runStep(
   artifact: CapabilityArtifact,
   opts: ReplayOptions & { allowRisky?: boolean },
   step: Step,
-  stepIndex = 0
+  stepIndex = 0,
+  internal: { disableRecovery?: boolean } = {}
 ): Promise<StepOutcome> {
   const t0 = Date.now();
   ctx.evidence.write({ type: 'step_start', stepId: step.id, intent: step.intent, action: step.action });
@@ -181,7 +218,7 @@ async function runStep(
   ) {
     // Human-in-the-loop approval: an operator may authorize the risky step
     // through the escalation channel instead of pre-approving the whole run.
-    if (opts.onEscalation && !ctx.recoveryAttempts.has(`risky:${step.id}`)) {
+    if (opts.onEscalation && !internal.disableRecovery && !ctx.recoveryAttempts.has(`risky:${step.id}`)) {
       ctx.recoveryAttempts.set(`risky:${step.id}`, 1);
       const reason = `risky step "${step.intent}" requires operator approval`;
       const approved = await escalateToHuman(ctx, opts, step, reason);
@@ -315,7 +352,7 @@ async function runStep(
     return { kind: 'ok' };
   } catch (err) {
     // 1) bounded recovery chain (e.g. session expiry re-login)
-    const recovered = await attemptRecovery(ctx, artifact, opts, step);
+    const recovered = internal.disableRecovery ? null : await attemptRecovery(ctx, artifact, opts, step, err);
     if (recovered) {
       ctx.timeline.push({
         stepId: step.id,
@@ -338,7 +375,7 @@ async function runStep(
       return { kind: 'business', business: biz };
     }
     // 3) human-in-the-loop escalation (once per step)
-    if (opts.onEscalation && !ctx.recoveryAttempts.has(`esc:${step.id}`)) {
+    if (opts.onEscalation && !internal.disableRecovery && !ctx.recoveryAttempts.has(`esc:${step.id}`)) {
       ctx.recoveryAttempts.set(`esc:${step.id}`, 1);
       const reason = `replay stuck at step ${step.id} ("${step.intent}"): ${shortMsg(err)}`;
       const resumed = await escalateToHuman(ctx, opts, step, reason);
@@ -368,18 +405,31 @@ async function runStepRetry(
   t0: number
 ): Promise<StepOutcome> {
   try {
+    // Fast-forward: rebuild deterministic state by RE-RUNNING the verified
+    // steps through the SAME guarded pipeline (policy, fail-closed frames,
+    // evidence). Non-idempotent steps are NEVER re-executed — a submit that
+    // already happened must not happen twice; crossing one means escalate.
     for (let j = 0; j < stepIndex; j++) {
       const prev = artifact.steps[j]!;
-      // The chain already re-authenticated: skip login-page steps entirely.
-      if (prev.pageUrl && /login\.aspx/i.test(prev.pageUrl)) continue;
+      if (prev.pageUrl && /login\.aspx/i.test(prev.pageUrl)) continue; // chain re-authenticated
       if (['extract', 'check', 'wait', 'scroll'].includes(prev.action)) continue;
-      try {
-        await executeStepBody(ctx, artifact, opts, prev);
-        const surf = ctx.driver.drainEvents();
-        if (surf.length) ctx.evidence.write({ type: 'surface_events', stepId: prev.id, fastForward: true, events: surf });
-        if (prev.action === 'click' || prev.action === 'press') await ctx.driver.waitForLoadStateSettle();
-      } catch (err) {
-        ctx.evidence.write({ type: 'fast_forward_skip', stepId: prev.id, reason: shortMsg(err) });
+      if (prev.idempotent === false) {
+        ctx.evidence.write({ type: 'fast_forward_blocked_non_idempotent', stepId: prev.id });
+        const ref = await shot(ctx, `fail-ff-${step.id}`);
+        return fail(ctx, step, 'act', 'FAST_FORWARD_BLOCKED', 'idempotent state reconstruction', `non-idempotent step ${prev.id} lies between recovery and the failed step — refusing to duplicate a side effect`, [ref]);
+      }
+      const ff = await runStep(ctx, artifact, { ...opts, onEscalation: undefined }, prev, j, { disableRecovery: true });
+      if (ff.kind === 'failure') {
+        // Benign: the flow already moved past this step (its control is gone
+        // because we're on a later page) → skip. Anything else (policy,
+        // ambiguous target, session dead…) is NOT benign → fail honestly
+        // instead of "hoping the next step works".
+        const benign = ff.failure?.errorClass === 'ELEMENT_NOT_FOUND' || ff.failure?.errorClass === 'TIMEOUT';
+        ctx.evidence.write({ type: 'fast_forward_skip', stepId: prev.id, reason: ff.failure?.errorClass, benign });
+        if (!benign) {
+          const ref = await shot(ctx, `fail-ff-${step.id}`);
+          return fail(ctx, step, 'act', 'FAST_FORWARD_FAILED', `reconstruction via ${prev.id}`, ff.failure?.observed ?? 'fast-forward step failed', [ref]);
+        }
       }
     }
     const outcome = await executeStepBody(ctx, artifact, opts, step);
@@ -577,9 +627,9 @@ async function attemptRecovery(
   ctx: Ctx,
   artifact: CapabilityArtifact,
   opts: ReplayOptions,
-  step: Step
+  step: Step,
+  err: unknown
 ): Promise<string | null> {
-  const url = ctx.driver.page.url();
   for (const spec of step.recoverableErrors ?? []) {
     // Expand shared-chain references into a concrete rule.
     const rule =
@@ -609,8 +659,8 @@ async function attemptRecovery(
     const urlHit = rule.when.redirectedToGlob
       ? allUrls.some((u) => globMatch(rule.when.redirectedToGlob!, u)) || allUrls.length === 0
       : false;
-    if (!urlHit && !rule.when.errorClass && !rule.when.pageTextContains && !rule.when.dialogTextContains) continue;
-    if (!urlHit && !rule.when.errorClass) continue;
+    const errHit = rule.when.errorClass ? rule.when.errorClass === errorClassOf(err) : false;
+    if (!urlHit && !errHit) continue;
 
     ctx.recoveryAttempts.set(key, used + 1);
     ctx.evidence.write({
@@ -631,7 +681,10 @@ async function attemptRecovery(
   return null;
 }
 
-/** Executes a recovery action chain. */
+/** Executes a recovery action chain. Fill/click/select actions run as
+ *  pseudo-steps through the SAME guarded runStep pipeline (policy on the
+ *  target frame, fail-closed resolution, evidence) — recovery does not get a
+ *  lawless fast path. */
 async function runRecoveryActions(
   ctx: Ctx,
   artifact: CapabilityArtifact,
@@ -640,9 +693,17 @@ async function runRecoveryActions(
   actions: Array<import('../core/artifact.js').RecoverAction>
 ): Promise<void> {
   const c = templateCtx(artifact, opts, ctx);
+  let n = 0;
   for (const act of actions) {
+    n += 1;
+    const pseudoId = `${step.id}-rec${n}`;
     if (act.action === 'navigate') {
-      await ctx.driver.act({ type: 'navigate', url: interpolate(act.urlTemplate, c) });
+      const url = interpolate(act.urlTemplate, c);
+      if (!ctx.policy.isUrlAllowed(url)) {
+        throw new Error(`POLICY_BLOCKED: recovery navigate outside allowlist: ${url}`);
+      }
+      await ctx.driver.act({ type: 'navigate', url });
+      await ctx.driver.waitForLoadStateSettle();
     } else if (act.action === 'wait') {
       await ctx.driver.act({ type: 'wait', ms: Math.min(act.durationMs, 5000) });
     } else if (act.action === 'gotoStepPage') {
@@ -676,17 +737,25 @@ async function runRecoveryActions(
       }
       await ctx.driver.act({ type: 'navigate', url });
     } else {
-      const res = await resolveDescriptor(ctx.driver.page, act.target, { timeoutMs: 6000 });
-      if (!res.locator) throw new Error('recovery target missing');
-      if (act.action === 'click') await res.locator.click({ timeout: 8000 });
-      else if (act.action === 'fill') await res.locator.fill(interpolate(act.valueTemplate, c), { timeout: 8000 });
-      else {
-        const label = interpolate(act.optionTextTemplate, c);
-        await res.locator.selectOption({ label }).catch(() => res.locator!.selectOption(label));
+      // fill / click / select — guarded pseudo-step through runStep.
+      const pseudoStep: Step = {
+        id: pseudoId,
+        intent: `recovery ${act.action} for ${step.id}`,
+        action: act.action === 'fill' ? 'fill' : act.action === 'click' ? 'click' : 'select',
+        target: act.target,
+        valueTemplate: act.action === 'fill' ? act.valueTemplate : undefined,
+        selectOptionText: act.action === 'select' ? act.optionTextTemplate : undefined,
+        pageUrl: step.pageUrl,
+        recoverableErrors: [],
+        riskClass: 'safe',
+        idempotent: true,
+      };
+      const outcome = await runStep(ctx, artifact, { ...opts, onEscalation: undefined }, pseudoStep, 0, {
+        disableRecovery: true,
+      });
+      if (outcome.kind === 'failure') {
+        throw new Error(`recovery ${act.action} failed: ${outcome.failure.errorClass}`);
       }
-      // Clicks inside the chain trigger navigations (Sign In → main) — settle
-      // so subsequent chain actions don't race the frameset reload.
-      if (act.action === 'click') await ctx.driver.waitForLoadStateSettle();
     }
   }
 }
@@ -712,9 +781,12 @@ async function escalateToHuman(
   ctx.evidence.write({ type: 'escalation_request', stepId: step.id, reason, urlAtPause: observation.url });
 
   const samples: string[] = [];
+  const hashes: string[] = [];
+  let stateChanges = 0;
   let sampling = true;
   const sampler = (async () => {
     let n = 0;
+    let lastHash = '';
     while (sampling) {
       await new Promise((r) => setTimeout(r, 1500));
       if (!sampling) break;
@@ -722,14 +794,26 @@ async function escalateToHuman(
       try {
         const shot = await ctx.driver.screenshot();
         const ref = await ctx.evidence.saveShot(shot.base64, `human-${String(n).padStart(2, '0')}`);
-        const outline = await ctx.driver.page.locator('body').innerText({ timeout: 1000 }).catch(() => '');
+        // Frameset reality: aggregate EVERY frame's text — the top-level body
+        // of a frameset page is empty, which once produced all-zero hashes.
+        let hay = '';
+        for (const f of ctx.driver.page.frames()) {
+          const t = await f.locator('body').innerText({ timeout: 800 }).catch(() => '');
+          if (t) hay += t + '\n';
+        }
+        const h = hashOf(hay);
+        const changed = lastHash !== '' && h !== lastHash;
+        if (changed) stateChanges += 1;
+        lastHash = h;
         samples.push(ref);
+        hashes.push(h);
         ctx.evidence.write({
           type: 'human_sample',
           stepId: step.id,
           n,
           shot: ref,
-          textHash: hashOf(outline),
+          textHash: h,
+          changed,
           url: ctx.driver.page.url(),
         });
       } catch {
@@ -750,13 +834,15 @@ async function escalateToHuman(
     interventionId: `esc-${step.id}`,
     reason,
     resumedByHuman: approved,
-    humanActionsObserved: samples.length,
+    humanSamplesCaptured: samples.length,
+    humanStateChanges: stateChanges,
   };
   ctx.evidence.write({
     type: 'escalation_resolved',
     stepId: step.id,
     approved,
     humanSamples: samples.length,
+    humanStateChanges: stateChanges,
     samples,
   });
   return approved;
@@ -827,6 +913,15 @@ export async function shot(ctx: Ctx, tag: string): Promise<string> {
   ctx.lastShots.push(rel);
   return rel;
 }
+
+
+
+
+
+
+
+
+
 
 
 

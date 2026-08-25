@@ -4,7 +4,6 @@
  * <frameset> shell, native confirm() on the irreversible step. No client framework.
  */
 import type { Member, TenantConfig } from './data.js';
-import { findMember } from './data.js';
 
 const VIEWSTATE =
   '/wEPDwULLTE3NjE5NzY0ODNkZGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -293,8 +292,4 @@ export function genericErrorPage(tenant: TenantConfig, code: string, message: st
   );
 }
 
-export function resolveMemberOrThrow(id: string): Member {
-  const m = findMember(id);
-  if (!m) throw new Error(`member not found: ${id}`);
-  return m;
-}
+

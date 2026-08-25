@@ -65,18 +65,21 @@ function loadArtifactBytes(): { bytes: Buffer; sha256: string; artifact: unknown
   return { bytes, sha256, artifact: JSON.parse(bytes.toString('utf8')) };
 }
 
-const ENV = (extra: Record<string, string> = {}): Record<string, string> => ({
-  baseUrl,
-  username: 'teller1',
-  password: 'Demo!2345',
-  ...extra,
+const ENV = (extra: Record<string, string> = {}): {
+  env: Record<string, string>;
+  runtimeEnv: Record<string, string | undefined>;
+} => ({
+  env: { baseUrl, ...extra },
+  // Bindings resolve INSIDE the engine from the runtime env — same contract
+  // the CLI uses. The simulator credential is a documented test fixture.
+  runtimeEnv: { LEGACYBANK_USER: 'teller1', LEGACYBANK_PASSWORD: 'Demo!2345' },
 });
 
 describe('deterministic replay (integration)', () => {
   it('happy path: SUCCESS with typed outputs, sha256 recorded, zero degraded steps', async () => {
     const { sha256, artifact } = loadArtifactBytes();
     const result = await replayCapability(artifact, {
-      env: ENV(),
+      ...ENV(),
       inputs: { memberId: 'M10041' },
       headless: true,
       runsDir: RUNS_DIR,
@@ -94,7 +97,7 @@ describe('deterministic replay (integration)', () => {
   it('business outcome: unknown member is an ANSWER (MEMBER_NOT_FOUND), not a crash', async () => {
     const { artifact } = loadArtifactBytes();
     const result = await replayCapability(artifact, {
-      env: ENV(),
+      ...ENV(),
       inputs: { memberId: 'M99999' },
       headless: true,
       runsDir: RUNS_DIR,
@@ -196,7 +199,7 @@ describe('deterministic replay (integration)', () => {
     try {
       const { artifact } = loadArtifactBytes();
       const runPromise = replayCapability(artifact, {
-        env: ENV(),
+        ...ENV(),
         inputs: { memberId: 'M10041' },
         headless: true,
         runsDir: RUNS_DIR,
@@ -220,4 +223,6 @@ describe('deterministic replay (integration)', () => {
     }
   }, 120_000);
 });
+
+
 

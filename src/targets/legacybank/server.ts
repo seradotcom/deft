@@ -8,7 +8,7 @@
  */
 import express from 'express';
 import crypto from 'node:crypto';
-import { TENANTS, DEMO_USER, findMember, type TenantConfig } from './data.js';
+import { TENANTS, DEMO_USER, createMembers, type Member, type TenantConfig } from './data.js';
 import {
   loginPage,
   topNavPage,
@@ -28,7 +28,7 @@ interface Session {
   tenantId: string;
   userId: string;
   lastSeen: number;
-  chaos: { slowNext?: boolean; interstitialNext?: boolean; expireNow?: boolean };
+  chaos: { slowNext?: boolean; interstitialNext?: boolean; expireNow?: boolean; modalNext?: boolean };
 }
 
 declare global {
@@ -46,7 +46,12 @@ const SESSION_COOKIE = 'lbsid';
 const SESSION_TIMEOUT_MS = Number(process.env.LEGACYBANK_SESSION_TIMEOUT_MS ?? 120_000);
 const SLOW_MS = Number(process.env.LEGACYBANK_SLOW_MS ?? 4000);
 
+// Per-instance fixture: every app gets a fresh deep clone, so scenarios cannot
+// contaminate each other through mutated account lists.
 export function createLegacyBankApp(): express.Express {
+  const members: Member[] = createMembers();
+  const findMember = (id: string): Member | undefined =>
+    members.find((m) => m.id.toUpperCase() === id.trim().toUpperCase());
   const app = express();
   app.use(express.urlencoded({ extended: true }));
   app.use(express.json());
@@ -62,7 +67,7 @@ export function createLegacyBankApp(): express.Express {
       res.status(404).send('Unknown institution. Use /acme/... or /nw/...');
       return;
     }
-    if (req.path.includes('/admin/chaos')) {
+    if (req.path.includes('/admin/')) {
       next(); // chaos controller is test instrumentation — no session required
       return;
     }
@@ -113,7 +118,22 @@ export function createLegacyBankApp(): express.Express {
         });
         res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${sid}; Path=/; HttpOnly`);
       }
-      res.status(opts.status ?? 200).type('html').send(body);
+      // One-shot unexpected modal: an overlay the automation has never seen —
+      // it blocks interaction underneath and forces a real human decision.
+      let finalBody = body;
+      const s = (req as express.Request & { session?: Session }).session;
+      if (s?.chaos.modalNext) {
+        s.chaos.modalNext = false;
+        const overlay = [
+          '<div id="unexpected-overlay" style="position:fixed;inset:0;background:rgba(20,20,20,.55);z-index:9999">',
+          '<div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);background:#fff;border:2px solid #444;padding:18px;font-family:Tahoma">',
+          '<b>Unexpected session notification</b><br>Your password expires in 0 days.<br><br>',
+          '<button id="overlay-dismiss" onclick="document.getElementById(\'unexpected-overlay\').remove()">Dismiss</button>',
+          '</div></div>',
+        ].join('');
+        finalBody = body.replace('</body>', `${overlay}</body>`);
+      }
+      res.status(opts.status ?? 200).type('html').send(finalBody);
     };
     if (opts.delay) setTimeout(fire, opts.delay);
     else fire();
@@ -343,6 +363,14 @@ export function createLegacyBankApp(): express.Express {
   // ---- chaos controller ----------------------------------------------------
   // Expires EVERY active session — lets the demo harness force a mid-flow
   // session timeout deterministically (the replay engine never calls this).
+  // Harness-only fixture reset: fresh members + no sessions.
+  app.post('/:tenant/admin/reset', (_req, res) => {
+    members.length = 0;
+    members.push(...createMembers());
+    sessions.clear();
+    res.json({ ok: true, reset: true });
+  });
+
   app.post('/:tenant/admin/chaos-all', (req, res) => {
     const body = req.body as Record<string, boolean>;
     let n = 0;
@@ -364,7 +392,7 @@ export function createLegacyBankApp(): express.Express {
       return;
     }
     const body = req.body as Record<string, boolean>;
-    for (const key of ['slowNext', 'interstitialNext', 'expireNow'] as const) {
+    for (const key of ['slowNext', 'interstitialNext', 'expireNow', 'modalNext'] as const) {
       if (body[key]) session.chaos[key] = true;
     }
     res.json({ ok: true, chaos: session.chaos });
@@ -394,4 +422,8 @@ if (process.argv[1] && /server\.(ts|js)$/.test(process.argv[1].replace(/\\/g, '/
     console.log(`LegacyBank simulator on http://localhost:${port}/acme/login.aspx and /nw/login.aspx`);
   });
 }
+
+
+
+
 

@@ -1,3 +1,6 @@
+import AjvDefault from 'ajv/dist/ajv.js';
+type AjvError = { instancePath: string; message?: string };
+type AjvValidator = { compile: (s: object) => ((data: unknown) => boolean) & { errors?: AjvError[] } };
 /**
  * Replay support: run context, variant overlays, input validation, checks,
  * relational extraction, and the failure/outcome classification helpers.
@@ -5,6 +8,7 @@
 import type { Locator, Page } from 'playwright';
 import type { Observation } from '../core/actions.js';
 import {
+  CapabilityArtifactSchema,
   type CapabilityArtifact,
   type Check,
   type ReplayResult,
@@ -12,14 +16,17 @@ import {
   type StepTimelineEntry,
 } from '../core/artifact.js';
 import { PlaywrightWebDriver } from '../surface/driver.js';
-import { interpolate, resolveDescriptor } from '../surface/targeting.js';
+import { interpolate, resolveDescriptor, resolveFrameByPathStrict } from '../surface/targeting.js';
 import { defaultPolicy, PolicyEngine } from '../safety/policy.js';
 import { EvidenceLogger } from '../evidence/logger.js';
 
 export interface ReplayOptions {
   tenantId?: string;
-  /** sha256 of the artifact bytes loaded by the caller � flows into the result. */
+  /** sha256 of the artifact bytes loaded by the caller — flows into the result. */
   artifactSha256?: string;
+  /** Raw runtime env — artifact environmentBindings resolve against it INSIDE
+   *  the engine. Pre-resolved `env` (if given) takes precedence per key. */
+  runtimeEnv?: Record<string, string | undefined>;
   env: Record<string, string>;
   inputs: Record<string, unknown>;
   headless?: boolean;
@@ -48,7 +55,11 @@ export interface Ctx {
     interventionId: string;
     reason: string;
     resumedByHuman: boolean;
-    humanActionsObserved: number;
+    /** Audit samples captured while the human held the lease. */
+    humanSamplesCaptured: number;
+    /** How many samples differed from the previous one � evidence of REAL
+     *  state change under human control (not five identical screenshots). */
+    humanStateChanges: number;
   };
 }
 
@@ -133,33 +144,61 @@ function setFlatPath(obj: Record<string, unknown>, flatKey: string, value: unkno
   cur[parts[parts.length - 1]!] = value;
 }
 
-const INPUT_SCHEMA = {
-  props(k: string, schema: unknown): { type?: string; pattern?: string } | undefined {
-    void k;
-    const s = schema as { properties?: Record<string, { type?: string; pattern?: string }> };
-    return s?.properties?.[k];
-  },
-};
+const ajv = new (AjvDefault as unknown as { new (o?: object): AjvValidator })({ allErrors: true });
 
+/** Full JSON Schema validation of the invocation against the artifact's
+ *  declared input contract — not a hand-rolled subset. */
 export function validateInputs(artifact: CapabilityArtifact, inputs: Record<string, unknown>): void {
-  const schema = artifact.inputs as {
-    required?: string[];
-    properties?: Record<string, { type?: string; pattern?: string }>;
-  };
-  const missing = (schema.required ?? []).filter((k) => inputs[k] === undefined);
-  if (missing.length > 0) throw new Error(`missing required input(s): ${missing.join(', ')}`);
-  for (const [k, prop] of Object.entries(schema.properties ?? {})) {
-    const v = inputs[k];
-    if (v === undefined) continue;
-    if (prop.type === 'string' && typeof v !== 'string') {
-      throw new Error(`input "${k}" must be a string`);
-    }
-    if (prop.pattern && typeof v === 'string' && !new RegExp(prop.pattern).test(v)) {
-      throw new Error(`input "${k}" does not match pattern ${prop.pattern}`);
-    }
+  const validate = ajv.compile(artifact.inputs as object);
+  const ok = validate(inputs);
+  if (!ok) {
+    const msg = (validate.errors ?? [])
+      .map((e: AjvError) => `${e.instancePath || '(root)'} ${e.message ?? ''}`)
+      .join('; ');
+    throw new Error(`input contract violation: ${msg}`);
   }
 }
-void INPUT_SCHEMA;
+
+/** Outputs must satisfy the declared contract before SUCCESS is returned. */
+export function validateOutputs(artifact: CapabilityArtifact, outputs: Record<string, unknown>): void {
+  const schema = artifact.outputs as object;
+  if (!schema || Object.keys(schema).length === 0) return;
+  const validate = ajv.compile(schema);
+  const ok = validate(outputs);
+  if (!ok) {
+    const msg = (validate.errors ?? [])
+      .map((e: AjvError) => `${e.instancePath || '(root)'} ${e.message ?? ''}`)
+      .join('; ');
+    throw Object.assign(new Error(`output contract violation: ${msg}`), {
+      deftClass: 'OUTPUT_CONTRACT_VIOLATION',
+    });
+  }
+}
+
+/**
+ * Resolve the artifact's declared environment bindings from the runtime
+ * environment. Secrets stay inside the engine — they are values, never
+ * model context.
+ */
+export function resolveEnvironmentBindings(
+  artifact: CapabilityArtifact,
+  runtimeEnv: Record<string, string | undefined>
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, binding] of Object.entries(artifact.environmentBindings ?? {})) {
+    if (binding.source === 'literal') out[key] = binding.value;
+    else if (binding.source === 'envVar') {
+      const v = runtimeEnv[binding.name];
+      if (v === undefined) throw new Error(`missing environment binding: ${key} (env var ${binding.name})`);
+      out[key] = v;
+    } else {
+      // configKey: declared for deployment wiring, unsupported at runtime —
+      // fail loudly rather than silently.
+      throw new Error(`unsupported binding source for ${key}`);
+    }
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Checks
@@ -189,6 +228,12 @@ export async function runCheck(
         if (t) hay += t + '\n';
       }
       return hay.toLowerCase().includes(interpolate(check.text, c).toLowerCase());
+    }
+    // Fail-closed: a missing frame in the checkpoint's frame path is a
+    // FRAME_NOT_FOUND, never 'check the parent surface instead'.
+    if ((check.target.scope.framePath ?? []).length > 0) {
+      const fr = resolveFrameByPathStrict(page, check.target.scope.framePath ?? []);
+      if (!fr) return false;
     }
     const res = await resolveDescriptor(page, check.target, { timeoutMs: check.timeoutMs ?? 8000 });
     if (!res.locator) return false;
@@ -226,13 +271,18 @@ const tableCellQueryFn = (q: TableQuery): string | null => {
     const colIdx = headers.indexOf(norm(q.colHeader));
     const rowIdx = headers.indexOf(norm(q.rowHeader));
     if (colIdx === -1 || rowIdx === -1) continue;
+    // Banking rule: a row identity matching MULTIPLE rows is not an answer.
+    // Return null (EXTRACT_FAILED) rather than silently taking the first match.
+    const matching: string[] = [];
     for (const row of rows.slice(1)) {
       const cells = Array.from(row.querySelectorAll('td'));
       const keyCell = cells[rowIdx];
       if (keyCell && norm(keyCell.textContent || '') === norm(q.rowValue)) {
-        return cells[colIdx]?.textContent?.trim() ?? null;
+        matching.push(cells[colIdx]?.textContent?.trim() ?? '');
       }
     }
+    if (matching.length === 1) return matching[0]!;
+    if (matching.length > 1) return null; // ambiguous row identity — never "first match"
   }
   return null;
 };
@@ -248,11 +298,10 @@ export async function extractStepOutput(
   const page: Page = ctx.driver.page;
 
   if (ex.strategy === 'tableCell') {
-    let frame = page.mainFrame();
-    for (const name of ex.scope.framePath ?? []) {
-      const next = frame.childFrames().find((f) => f.name() === name || f.url() === name);
-      if (!next) break;
-      frame = next;
+    const frame = resolveFrameByPathStrict(page, ex.scope.framePath ?? []);
+    if (!frame) {
+      ctx.evidence.write({ type: 'extract_error', stepId: step.id, message: 'FRAME_NOT_FOUND' });
+      return null;
     }
     try {
       const tableCount = await frame.evaluate('document.querySelectorAll("table").length');
@@ -351,11 +400,8 @@ export function matchBusinessOutcome(
 ): NonNullable<ReplayResult['businessOutcome']> | null {
   for (const bo of artifact.businessOutcomes ?? []) {
     if (bo.detect.duringStepId && bo.detect.duringStepId !== failedStepId) continue;
-    let hit = !(
-      bo.detect.pageTextContains ||
-      bo.detect.dialogTextContains ||
-      bo.detect.urlGlob
-    );
+    // A declared outcome needs a CONCRETE detector — no patternless auto-hit.
+    let hit = false;
     if (bo.detect.pageTextContains && probe.pageText?.toLowerCase().includes(bo.detect.pageTextContains.toLowerCase())) hit = true;
     if (bo.detect.dialogTextContains && probe.dialogText?.toLowerCase().includes(bo.detect.dialogTextContains.toLowerCase())) hit = true;
     if (bo.detect.urlGlob && probe.url && globMatch(bo.detect.urlGlob, probe.url)) hit = true;
@@ -369,4 +415,13 @@ export function matchBusinessOutcome(
 export async function locatorText(locator: Locator): Promise<string> {
   return (await locator.innerText({ timeout: 4000 }).catch(() => '')) ?? '';
 }
+
+
+
+
+
+
+
+
+
 

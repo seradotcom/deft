@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "description": "DEFT — the model discovers, the capability replays. Computer-use automation: LLM-driven discovery on a live UI, compiled into a typed, versioned capability artifact that replays deterministically with no model in the loop.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
@@ -17,6 +19,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "ajv": "^8.20.0",
     "commander": "^14.0.2",
     "express": "^5.2.1",
     "playwright": "^1.58.1",
@@ -30,4 +33,3 @@
     "vitest": "^4.0.18"
   }
 }
-

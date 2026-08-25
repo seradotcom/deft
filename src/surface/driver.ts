@@ -415,8 +415,8 @@ export class PlaywrightWebDriver implements SurfaceDriver {
   findTableCellForValue(
     framePath: string[],
     value: string
-  ): Promise<{ rowHeader: string; rowKeyValue: string; colHeader: string } | null>;
-
+  ): Promise<
+    { rowHeader: string; rowKeyValue: string; colHeader: string } | { ambiguous: true; matchCount: number } | null>;
   findTableCellForValue(
     framePath: string[],
     value: string
@@ -587,10 +587,12 @@ const markAtPointFn = (coords: number[]): boolean => {
 };
 
 /** Reverse table lookup: given a cell value, find its column header and the
- *  header+value of the row's key cell (first non-empty non-hit cell). */
+ *  header+value of the row's key cell. AMBIGUITY IS DATA: if the value matches
+ *  more than one row, the binding is not a safe extraction identity and the
+ *  caller must fail loudly instead of returning "the first match". */
 const findCellFn = (
   value: string
-): { rowHeader: string; rowKeyValue: string; colHeader: string } | null => {
+): { rowHeader: string; rowKeyValue: string; colHeader: string } | { ambiguous: true; matchCount: number } | null => {
   const norm = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
   for (const table of Array.from(document.querySelectorAll('table'))) {
     const rows = Array.from(table.querySelectorAll('tr'));
@@ -604,7 +606,18 @@ const findCellFn = (
       const cells = Array.from(row.querySelectorAll('td'));
       const hitIdx = cells.findIndex((c) => norm(c.textContent || '') === norm(value));
       if (hitIdx === -1 || headers[hitIdx] === undefined) continue;
-      let keyIdx = cells.findIndex(
+      // Count ALL rows in this table matching the same value.
+      let matchCount = 0;
+      let first: { cells: HTMLElement[]; hitIdx: number } | null = null;
+      for (const r2 of rows.slice(1)) {
+        const cs = Array.from(r2.querySelectorAll('td'));
+        if (cs[hitIdx] && norm(cs[hitIdx].textContent || '') === norm(value)) {
+          matchCount += 1;
+          if (!first) first = { cells: cs, hitIdx };
+        }
+      }
+      if (matchCount > 1) return { ambiguous: true, matchCount };
+      let keyIdx = first!.cells.findIndex(
         (c, i) => i !== hitIdx && (c.textContent || '').trim() !== ''
       );
       if (keyIdx === -1) keyIdx = 0;
@@ -612,7 +625,7 @@ const findCellFn = (
       if (!rowHeader) continue;
       return {
         rowHeader,
-        rowKeyValue: (cells[keyIdx]?.textContent || '').trim(),
+        rowKeyValue: (first!.cells[keyIdx]?.textContent || '').trim(),
         colHeader: headers[hitIdx] ?? '',
       };
     }
@@ -730,4 +743,5 @@ function toAbsolute(url: string, current: string): string {
     }
   }
 }
+
 

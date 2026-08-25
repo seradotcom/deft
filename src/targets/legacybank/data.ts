@@ -77,7 +77,13 @@ export interface Member {
   locked?: boolean;
 }
 
-export const MEMBERS: Member[] = [
+/** Fresh deep clone per app instance � scenarios start from a known fixture
+ * and cannot contaminate each other through mutated account lists. */
+export function createMembers(): Member[] {
+  return JSON.parse(JSON.stringify(MEMBERS_SEED));
+}
+
+const MEMBERS_SEED: Member[] = [
   {
     id: 'M10041',
     firstName: 'Jane',
@@ -122,6 +128,4 @@ export const MEMBERS: Member[] = [
 /** Demo credentials (simulator only — still treated as sensitive by DEFT's redactor). */
 export const DEMO_USER = { userId: 'teller1', password: 'Demo!2345' };
 
-export function findMember(id: string): Member | undefined {
-  return MEMBERS.find((m) => m.id.toUpperCase() === id.trim().toUpperCase());
-}
+

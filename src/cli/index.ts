@@ -82,12 +82,13 @@ program
     const planner = new HybridVisionPlanner(cfg.geminiApiKey, cfg.plannerModel);
     const policy = defaultPolicy(baseUrl);
 
+    // Credentials NEVER enter model context: authentication is deterministic
+    // engine plumbing (see performDeterministicAuth). The goal is the goal.
     const username = process.env.LEGACYBANK_USER ?? 'teller1';
     const password = process.env.LEGACYBANK_PASSWORD ?? 'Demo!2345';
-    const goalWithCredentials = `${cmd.goal} Sign in at the entry screen with operator ID "${username}" and password "${password}" if asked.`;
 
     const run = new DiscoveryRun(
-      { goal: goalWithCredentials, baseUrl, entryUrl },
+      { goal: cmd.goal, baseUrl, entryUrl },
       planner,
       policy,
       {
@@ -96,6 +97,13 @@ program
         viewport: cfg.viewport,
         runsDir: cfg.runsDir,
         secrets: [username, password],
+        auth: {
+          userSelector: '#ctl00_ContentPlaceHolder1_txtUserId',
+          passSelector: '#ctl00_ContentPlaceHolder1_txtPassword',
+          submitSelector: '#ctl00_ContentPlaceHolder1_btnSignIn',
+          username,
+          password,
+        },
         onEscalation: async (info) => {
           await ensureConsole();
           const verdict = await console_.requestAndWait({
@@ -111,7 +119,7 @@ program
 
     console.error(`▶ discover: ${cmd.goal}`);
     const result = await run.run();
-    console.error(`■ discovery ended: ${result.endState} (${result.steps.length} recorded steps)`);
+    console.error(`■ discovery ended: ${result.endState} (${result.steps.length} recorded steps + auth phase)`);
     if (consoleUp) await console_.stop();
 
     if (result.endState !== 'DONE') {
@@ -174,11 +182,8 @@ program
     const artifact = CapabilityArtifactSchema.parse(JSON.parse(artifactBytes.toString('utf8')));
 
     const tenantBase = cmd.tenant ? cfg.baseUrlByTenant[cmd.tenant] : undefined;
-    const env: Record<string, string> = {
-      baseUrl: tenantBase ?? cfg.baseUrlByTenant.acme!,
-      username: process.env.LEGACYBANK_USER ?? 'teller1',
-      password: process.env.LEGACYBANK_PASSWORD ?? 'Demo!2345',
-    };
+    // Environment bindings resolve INSIDE the engine from the runtime env �
+    // secrets are engine-scope values (also true for the CLI caller path).
 
     const console_ = new OperatorConsole(cfg.operatorPort, 'artifacts/operator');
     let consoleUp = false;
@@ -186,7 +191,8 @@ program
     const result = await replayCapability(artifact, {
       artifactSha256,
       tenantId: cmd.tenant,
-      env,
+      runtimeEnv: process.env,
+      env: { baseUrl: tenantBase ?? cfg.baseUrlByTenant.acme! },
       inputs: parseInputs(cmd.input),
       headless: !cmd.headed,
       allowRisky: Boolean(cmd.allowRisky),
@@ -243,6 +249,7 @@ function extractLoginTargets(result: Awaited<ReturnType<DiscoveryRun['run']>>) {
 }
 
 program.parseAsync(process.argv);
+
 
 
 

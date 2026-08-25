@@ -201,32 +201,26 @@ describe('deterministic replay (integration)', () => {
   it('session recovery: mid-flow expiry → relogin chain + fast-forward → SUCCESS', async () => {
     // Use M10087 — prior tests contaminate M10041 with sub-accounts, and the
     // ambiguity rejection correctly refuses a non-unique Savings row match.
-    process.env.LEGACYBANK_SESSION_TIMEOUT_MS = '3000';
-    try {
-      const { artifact } = loadArtifactBytes();
-      const runPromise = replayCapability(artifact, {
-        ...ENV(),
-        inputs: { memberId: 'M10087' },
-        headless: true,
-        runsDir: RUNS_DIR,
-      });
-      // Force expiry mid-flow, right after the login burst.
-      await new Promise((r) => setTimeout(r, 2500));
-      await fetch(`${baseUrl}/acme/admin/chaos-all`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expireNow: true }),
-      });
-      const result = await runPromise;
-      expect(result.status).toBe('SUCCESS');
-      expect(result.outputs?.savingsBalance).toBe('$10,234.10');
-      // The recovery actually fired: a step was retried after re-authentication.
-      const log = fs.readFileSync(path.join(RUNS_DIR, result.runId, 'log.jsonl'), 'utf8');
-      expect(log).toContain('"type":"recovering"');
-      expect(log).toContain('step_ok_after_recovery');
-    } finally {
-      delete process.env.LEGACYBANK_SESSION_TIMEOUT_MS;
-    }
+    await fetch(`${baseUrl}/acme/admin/reset`, { method: 'POST' });
+    await fetch(`${baseUrl}/acme/admin/chaos-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expireOnPath: '/acme/search.aspx' }),
+    });
+
+    const { artifact } = loadArtifactBytes();
+    const result = await replayCapability(artifact, {
+      ...ENV(),
+      inputs: { memberId: 'M10087' },
+      headless: true,
+      runsDir: RUNS_DIR,
+    });
+    expect(result.status, JSON.stringify(result.failure)).toBe('SUCCESS');
+    expect(result.outputs?.savingsBalance).toBe('$10,234.10');
+    // The recovery actually fired: a step was retried after re-authentication.
+    const log = fs.readFileSync(path.join(RUNS_DIR, result.runId, 'log.jsonl'), 'utf8');
+    expect(log).toContain('"type":"recovering"');
+    expect(log).toContain('step_ok_after_recovery');
   }, 120_000);
 });
 

@@ -3,6 +3,7 @@
  *
  * Chaos controller (deterministic fault injection for evidence runs):
  *   POST /:tenant/admin/chaos  { "slowNext" | "interstitialNext" | "expireNow": true }
+ *   POST /:tenant/admin/chaos-all  { "expireNow": true } | { "expireOnPath": "/path" }
  * The REPLAY ENGINE never calls these — the demo harness does, to simulate
  * legitimate runtime conditions of a real institution's app.
  */
@@ -50,6 +51,7 @@ const SLOW_MS = Number(process.env.LEGACYBANK_SLOW_MS ?? 4000);
 // contaminate each other through mutated account lists.
 export function createLegacyBankApp(): express.Express {
   const members: Member[] = createMembers();
+  let expireOnPath: string | undefined;
   const findMember = (id: string): Member | undefined =>
     members.find((m) => m.id.toUpperCase() === id.trim().toUpperCase());
   const app = express();
@@ -80,7 +82,11 @@ export function createLegacyBankApp(): express.Express {
       return;
     }
 
-    if (session && session.chaos.expireNow) {
+    if (session && expireOnPath === req.path) {
+      expireOnPath = undefined;
+      sessions.delete(session.sid);
+      session = undefined;
+    } else if (session && session.chaos.expireNow) {
       sessions.delete(session.sid);
       session = undefined;
     } else if (session) {
@@ -368,11 +374,12 @@ export function createLegacyBankApp(): express.Express {
     members.length = 0;
     members.push(...createMembers());
     sessions.clear();
+    expireOnPath = undefined;
     res.json({ ok: true, reset: true });
   });
 
   app.post('/:tenant/admin/chaos-all', (req, res) => {
-    const body = req.body as Record<string, boolean>;
+    const body = req.body as Record<string, unknown>;
     let n = 0;
     if (body.expireNow) {
       for (const s of sessions.values()) {
@@ -380,7 +387,8 @@ export function createLegacyBankApp(): express.Express {
         n += 1;
       }
     }
-    res.json({ ok: true, sessionsMarked: n });
+    if (typeof body.expireOnPath === 'string') expireOnPath = body.expireOnPath;
+    res.json({ ok: true, sessionsMarked: n, expireOnPath });
   });
 
   app.post('/:tenant/admin/chaos', (req, res) => {

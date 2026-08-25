@@ -33,7 +33,8 @@ Requirements: **Node ≥ 20**, npm. A Gemini API key is needed **only for
 discovery** — replays and all tests run fully offline.
 
 ```bash
-npm install
+git clone https://github.com/seradotcom/deft.git && cd deft
+npm ci
 npx playwright install chromium
 cp .env.example .env        # add your GEMINI_API_KEY
 npm run build
@@ -48,7 +49,7 @@ npm run target:start        # http://localhost:7788/acme/login.aspx  ·  /nw/log
 Terminal 2 — discover a capability with a real LLM run:
 
 ```bash
-npm run agent:discover -- \
+node dist/cli/index.js discover \
   --tenant acme \
   --goal "Look up member M10041 in member search and read the balance of their Savings account." \
   --capability-id legacybank.lookup-member-balance \
@@ -61,15 +62,15 @@ npm run agent:discover -- \
 Then replay it — deterministically, no model, no API key:
 
 ```bash
-npm run replay -- legacybank.lookup-member-balance --input memberId=M10041
+node dist/cli/index.js replay legacybank.lookup-member-balance --input memberId=M10041
 # → { "status": "SUCCESS", "outputs": { "savingsBalance": "$2,450.75" } }
 
 # Expected business result (not an error):
-npm run replay -- legacybank.lookup-member-balance --input memberId=M99999
+node dist/cli/index.js replay legacybank.lookup-member-balance --input memberId=M99999
 # → { "status": "BUSINESS_OUTCOME", "businessOutcome": { "code": "MEMBER_NOT_FOUND" } }
 
 # Same capability, second tenant of the same vendor product (variant overlay):
-npm run replay -- legacybank.lookup-member-balance --tenant nw --input memberId=M10041
+node dist/cli/index.js replay legacybank.lookup-member-balance --tenant nw --input memberId=M10041
 ```
 
 ### The full story: risky steps and human approval
@@ -79,15 +80,16 @@ financial product — an irreversible action behind a native `window.confirm`:
 
 ```bash
 # Automation refuses to cross the line unattended:
-npm run replay -- legacybank.open-sub-account --input memberId=M10041 \
-  --input "nickname=Vacation fund" --input deposit=100
+node dist/cli/index.js replay legacybank.open-sub-account \
+  --input memberId=M10041 --input "nickname=Vacation fund" --input deposit=100
 # → FAILED / RISKY_STEP_BLOCKED at the confirm step
 
 # With an operator in the loop: the console raises an intervention with the
 # REAL live observation; the browser is headed — take control of the actual
 # window, approve, resume → the run completes with a human-action audit.
-npm run replay -- legacybank.open-sub-account --input memberId=M10041 \
-  --input "nickname=Vacation fund" --input deposit=100 --escalate --headed
+node dist/cli/index.js replay legacybank.open-sub-account \
+  --input memberId=M10041 --input "nickname=Vacation fund" --input deposit=100 \
+  --escalate --headed
 # operator console: http://localhost:7790
 ```
 
@@ -104,6 +106,10 @@ npm run verify:submission
 ```bash
 npm test
 ```
+
+> Note: the demo commands call the CLI directly (`node dist/cli/index.js`).
+> Going through `npm run` also works, but npm can swallow `--input`-style
+> flags on some versions — the direct invocation is unambiguous.
 
 ---
 

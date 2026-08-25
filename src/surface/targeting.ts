@@ -191,6 +191,19 @@ export function resolveFrameByPath(page: Page, path: string[]): Frame {
   return frame;
 }
 
+/** Fail-closed frame resolution: null when ANY path segment is missing.
+ *  Silent fallback to a parent frame once made replay act on the wrong
+ *  surface after a session-expiry redirect — never again. */
+export function resolveFrameByPathStrict(page: Page, path: string[]): Frame | null {
+  let frame: Frame = page.mainFrame();
+  for (const name of path) {
+    const next = frame.childFrames().find((f) => f.name() === name || f.url() === name);
+    if (!next) return null;
+    frame = next;
+  }
+  return frame;
+}
+
 export async function resolveDescriptor(
   page: Page,
   desc: TargetDescriptor,

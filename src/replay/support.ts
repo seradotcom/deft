@@ -3,6 +3,7 @@
  * relational extraction, and the failure/outcome classification helpers.
  */
 import type { Locator, Page } from 'playwright';
+import type { Observation } from '../core/actions.js';
 import {
   type CapabilityArtifact,
   type Check,
@@ -17,13 +18,21 @@ import { EvidenceLogger } from '../evidence/logger.js';
 
 export interface ReplayOptions {
   tenantId?: string;
+  /** sha256 of the artifact bytes loaded by the caller � flows into the result. */
+  artifactSha256?: string;
   env: Record<string, string>;
   inputs: Record<string, unknown>;
   headless?: boolean;
   allowRisky?: boolean;
   runsDir?: string;
-  /** Human-in-the-loop: called when a step can't be completed safely. */
-  onEscalation?: (info: { reason: string }) => Promise<boolean>;
+  /**
+   * Human-in-the-loop: called when a step can't be completed safely or a risky
+   * step needs approval. Receives the REAL current observation (screenshot +
+   * a11y outline) so the operator sees the actual live state. While the
+   * callback is pending, the engine samples the live session (screenshots +
+   * a11y) — that audit trail IS the record of what the human did.
+   */
+  onEscalation?: (info: { reason: string; observation: Observation }) => Promise<boolean>;
 }
 
 export interface Ctx {
@@ -173,13 +182,13 @@ export async function runCheck(
       return page.frames().some((f) => globMatch(pattern, f.url()));
     }
     if (check.assert === 'pageTextContains') {
-      // Frameset-aware: aggregate visible text across all frames.
+      // Frameset apps: aggregate visible text across all frames.
       let hay = '';
       for (const f of page.frames()) {
         const t = await f.locator('body').innerText({ timeout: 2000 }).catch(() => '');
         if (t) hay += t + '\n';
       }
-      return hay.toLowerCase().includes(check.text.toLowerCase());
+      return hay.toLowerCase().includes(interpolate(check.text, c).toLowerCase());
     }
     const res = await resolveDescriptor(page, check.target, { timeoutMs: check.timeoutMs ?? 8000 });
     if (!res.locator) return false;
@@ -284,7 +293,7 @@ export async function extractStepOutput(
 
 export function globMatch(glob: string, url: string): boolean {
   const re = new RegExp(
-    '^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '::').replace(/\*/g, '[^/]*').replace(/::/g, '.*') + '$'
+    '^' + glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '::').replace(/\*/g, '[^/]*').replace(/::/g, '.*') + '$'
   );
   return re.test(url);
 }
@@ -360,3 +369,4 @@ export function matchBusinessOutcome(
 export async function locatorText(locator: Locator): Promise<string> {
   return (await locator.innerText({ timeout: 4000 }).catch(() => '')) ?? '';
 }
+

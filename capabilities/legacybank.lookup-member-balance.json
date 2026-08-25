@@ -7,9 +7,9 @@
     "description": "Signs into LegacyBank core, searches a member by ID, opens their record, and reads the Savings account balance from the accounts table.",
     "version": "1.0.0",
     "status": "needs-review",
-    "createdAt": "2026-08-23T22:15:09.501Z",
-    "updatedAt": "2026-08-23T22:15:09.501Z",
-    "notes": "Operator-curated draft: removed redundant login attempts from the discovery transcript; kept the verified minimal flow."
+    "createdAt": "2026-08-25T00:14:51.773Z",
+    "updatedAt": "2026-08-25T00:14:51.773Z",
+    "notes": "Operator-curated: consolidated per-account extraction duplicates into the canonical Savings output; strengthened success checkpoint to the member detail page."
   },
   "target": {
     "appFamily": "legacybank",
@@ -23,11 +23,13 @@
         },
         "patches": {
           "target.entryUrlTemplate": "http://localhost:7788/nw/login.aspx",
-          "steps[s10].target.primary.name": "Login",
-          "steps[s11].target.primary.name": "Members",
-          "steps[s13].target.primary.name": "Search"
+          "steps[s3].target.primary.name": "Login",
+          "steps[s4].target.primary.name": "Members",
+          "steps[s4].target.fingerprint.accessibleName": "Members",
+          "steps[s6].target.primary.name": "Search",
+          "steps[s6].target.fingerprint.accessibleName": "Search"
         },
-        "notes": "NorthWind runs the same CoreVision product with different labels; vendor control names (ctl00$...) are identical."
+        "notes": "NorthWind: same CoreVision product, different labels. Patches cover BOTH the locator names and the recorded fingerprints (identity evidence must match the tenant surface too)."
       }
     ]
   },
@@ -49,9 +51,12 @@
     "properties": {
       "savingsBalance": {
         "type": "string",
-        "description": "read from table column \"Balance\""
+        "description": "Balance of the Savings account"
       }
-    }
+    },
+    "required": [
+      "savingsBalance"
+    ]
   },
   "environmentBindings": {
     "username": {
@@ -67,7 +72,7 @@
   },
   "steps": [
     {
-      "id": "l1",
+      "id": "s1",
       "intent": "Enter operator user ID",
       "action": "fill",
       "target": {
@@ -109,7 +114,7 @@
       "riskClass": "safe"
     },
     {
-      "id": "l2",
+      "id": "s2",
       "intent": "Enter operator password",
       "action": "fill",
       "target": {
@@ -151,7 +156,7 @@
       "riskClass": "safe"
     },
     {
-      "id": "s10",
+      "id": "s3",
       "intent": "Click Sign In",
       "action": "click",
       "target": {
@@ -205,7 +210,7 @@
       "riskClass": "safe"
     },
     {
-      "id": "s11",
+      "id": "s4",
       "intent": "Click Member Search",
       "action": "click",
       "target": {
@@ -229,25 +234,25 @@
           },
           {
             "kind": "coordinate",
-            "x": 79,
-            "y": 175,
+            "x": 267,
+            "y": 18,
             "note": "last resort; frame-local pixel center at record time"
           }
         ],
         "scope": {
           "framePath": [
-            "content"
+            "topFrame"
           ]
         },
         "fingerprint": {
           "tag": "a",
           "accessibleName": "Member Search",
-          "ordinalInParent": 0
+          "ordinalInParent": 1
         },
         "quality": "verified",
         "rationale": "3 semantic locator(s) verified against the live element at record time"
       },
-      "pageUrl": "http://localhost:7788/acme/home.aspx",
+      "pageUrl": "http://localhost:7788/acme/topnav.aspx",
       "recoverableErrors": [
         {
           "chainRef": "relogin",
@@ -257,7 +262,7 @@
       "riskClass": "safe"
     },
     {
-      "id": "s12",
+      "id": "s5",
       "intent": "Type into member id",
       "action": "fill",
       "target": {
@@ -306,7 +311,7 @@
       "riskClass": "safe"
     },
     {
-      "id": "s13",
+      "id": "s6",
       "intent": "Click Find Member",
       "action": "click",
       "target": {
@@ -367,7 +372,7 @@
       "riskClass": "safe"
     },
     {
-      "id": "s14",
+      "id": "s7",
       "intent": "Click Select",
       "action": "click",
       "target": {
@@ -425,7 +430,7 @@
       "riskClass": "safe"
     },
     {
-      "id": "x15",
+      "id": "x8",
       "intent": "Read savingsBalance: cell of column \"Balance\" in the row where Account Type = Savings",
       "action": "extract",
       "pageUrl": "http://localhost:7788/acme/results.aspx",
@@ -548,19 +553,31 @@
         "action": "click",
         "target": {
           "primary": {
-            "kind": "name",
-            "name": "ctl00$ContentPlaceHolder1$txtUserId"
+            "kind": "role",
+            "role": "button",
+            "name": "Sign In",
+            "exact": true
           },
           "fallbacks": [
             {
+              "kind": "role",
+              "role": "button",
+              "name": "Sign In",
+              "exact": false
+            },
+            {
+              "kind": "name",
+              "name": "ctl00$ContentPlaceHolder1$btnSignIn"
+            },
+            {
               "kind": "id",
-              "id": "ctl00_ContentPlaceHolder1_txtUserId",
+              "id": "ctl00_ContentPlaceHolder1_btnSignIn",
               "note": "legacy autogenerated id"
             },
             {
               "kind": "coordinate",
-              "x": 731,
-              "y": 142,
+              "x": 682,
+              "y": 201,
               "note": "last resort; frame-local pixel center at record time"
             }
           ],
@@ -569,19 +586,17 @@
           },
           "fingerprint": {
             "tag": "input",
-            "idPattern": "ctl{N}_ContentPlaceHolder{D}_txtUserId",
+            "idPattern": "ctl{N}_ContentPlaceHolder{D}_btnSignIn",
+            "accessibleName": "Sign In",
             "ordinalInParent": 0,
             "attributes": {
-              "name": "ctl00$ContentPlaceHolder1$txtUserId",
-              "type": "text"
+              "name": "ctl00$ContentPlaceHolder1$btnSignIn",
+              "type": "submit"
             }
           },
           "quality": "verified",
-          "rationale": "2 semantic locator(s) verified against the live element at record time"
+          "rationale": "4 semantic locator(s) verified against the live element at record time"
         }
-      },
-      {
-        "action": "gotoStepPage"
       },
       {
         "action": "wait",
@@ -593,7 +608,11 @@
     "allOf": [
       {
         "assert": "urlMatchesGlob",
-        "pattern": "**/main.aspx*"
+        "pattern": "**/detail.aspx?id={{inputs.memberId}}*"
+      },
+      {
+        "assert": "pageTextContains",
+        "text": "{{inputs.memberId}}"
       }
     ]
   },
@@ -608,14 +627,14 @@
     "notes": "Credentials resolved from env at runtime; never persisted."
   },
   "provenance": {
-    "discoveredFromRunId": "discovery-2026-08-23T22-12-51-669Z-ff8651",
+    "discoveredFromRunId": "discovery-2026-08-25T00-11-36-087Z-78460b",
     "plannerModel": "gemini-3.5-flash",
-    "recordedAt": "2026-08-23T22:15:09.501Z",
-    "stepCount": 15,
+    "recordedAt": "2026-08-25T00:14:51.773Z",
+    "stepCount": 10,
     "validation": {
-      "lastReplayAt": "2026-08-23T23:04:23.230Z",
+      "lastReplayAt": "2026-08-25T01:18:57.932Z",
       "lastReplayStatus": "SUCCESS",
-      "replaySuccessCount": 7,
+      "replaySuccessCount": 24,
       "replayFailureCount": 5
     }
   }

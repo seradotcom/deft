@@ -358,6 +358,8 @@ export interface ReplayResult {
   runId: string;
   capabilityId: string;
   capabilityVersion: string;
+  /** sha256 of the exact artifact bytes this run executed — audit trail. */
+  artifactSha256?: string;
   status: ReplayStatus;
   outputs?: Record<string, unknown>;
   businessOutcome?: { code: string; description: string; returnsToCaller: Record<string, unknown> };

@@ -144,7 +144,9 @@ program
 
     fs.mkdirSync(cfg.capabilitiesDir, { recursive: true });
     const file = path.join(cfg.capabilitiesDir, `${artifact.metadata.id}.json`);
-    fs.writeFileSync(file, JSON.stringify(artifact, null, 2));
+    // Belt-and-suspenders: the artifact write passes through secret scrubbing.
+    const { redactDeep } = await import('../safety/redact.js');
+    fs.writeFileSync(file, redactDeep(JSON.stringify(artifact, null, 2)));
     console.log(JSON.stringify({
       compiled: file,
       status: artifact.metadata.status,
@@ -166,7 +168,10 @@ program
     const cfg = loadConfig();
     const file = path.join(cfg.capabilitiesDir, `${id}.json`);
     if (!fs.existsSync(file)) throw new Error(`capability not found: ${file}`);
-    const artifact = CapabilityArtifactSchema.parse(JSON.parse(fs.readFileSync(file, 'utf8')));
+    const artifactBytes = fs.readFileSync(file);
+    const { createHash } = await import('node:crypto');
+    const artifactSha256 = createHash('sha256').update(artifactBytes).digest('hex');
+    const artifact = CapabilityArtifactSchema.parse(JSON.parse(artifactBytes.toString('utf8')));
 
     const tenantBase = cmd.tenant ? cfg.baseUrlByTenant[cmd.tenant] : undefined;
     const env: Record<string, string> = {
@@ -179,6 +184,7 @@ program
     let consoleUp = false;
 
     const result = await replayCapability(artifact, {
+      artifactSha256,
       tenantId: cmd.tenant,
       env,
       inputs: parseInputs(cmd.input),
@@ -187,13 +193,13 @@ program
       runsDir: cfg.runsDir,
       onEscalation: cmd.escalate
         ? async (info) => {
-            const obs = await fetchObservationForConsole(cfg);
             await ensure(console_, cfg, () => { consoleUp = true; });
+            // The engine hands us the REAL live observation — the console card
+            // shows the operator exactly what the automation sees.
             const verdict = await console_.requestAndWait({
               source: 'replay',
               reason: info.reason,
-              observation: obs,
-              saveShot: async () => '',
+              observation: info.observation,
             });
             return verdict === 'resumed';
           }
@@ -223,27 +229,6 @@ async function ensure(c: OperatorConsole, cfg: { operatorPort: number }, mark: (
   console.error(`(operator console at http://localhost:${cfg.operatorPort})`);
 }
 
-/** Replay-side escalation needs an observation snapshot of current state. */
-async function fetchObservationForConsole(_cfg: unknown): Promise<import('../core/actions.js').Observation> {
-  // The engine escalates synchronously inside its own driver context; to keep
-  // the seam simple we hand the console the last evidence screenshot instead.
-  const shotsDir = 'artifacts/runs';
-  const latest = fs
-    .readdirSync(shotsDir)
-    .sort()
-    .pop();
-  return {
-    url: '(see latest run)',
-    title: latest ?? 'unknown',
-    screenshotBase64: '',
-    viewport: { width: 1440, height: 900 },
-    a11yAnnotatedYaml: '',
-    refIndex: {},
-    frames: [],
-    at: new Date().toISOString(),
-  };
-}
-
 function extractLoginTargets(result: Awaited<ReturnType<DiscoveryRun['run']>>) {
   const loginSteps = result.steps.filter(
     (s) =>
@@ -258,4 +243,6 @@ function extractLoginTargets(result: Awaited<ReturnType<DiscoveryRun['run']>>) {
 }
 
 program.parseAsync(process.argv);
+
+
 

@@ -123,10 +123,30 @@ most instructive bug: steps ran one page behind).
 (`maxAttempts ≤ 3`, every attempt in evidence). The flagship: session expiry
 mid-flow. Legacy apps redirect the *frame* to login while the top URL never
 moves — so recovery matches the redirect glob against **every frame URL**, then
-runs a shared `relogin` chain (entry → credentials from env → submit →
-`gotoStepPage`, which returns the step's frame to the page it was on) and
-retries once. Evidence bundle `replay-session-recovery/` shows the chain firing
-and the triggering step recovering.
+runs a shared `relogin` chain (entry → credentials from env → submit), then
+**fast-forwards the deterministic flow**: the verified steps between login and
+the failed one are re-executed so POST-arrival pages are re-reached by re-running
+the flow rather than by blind GET navigation (navigating straight to a
+POST-arrival page yields "Cannot GET" — the screenshots taught us this). The
+failed step is then retried through the same guarded executor. Evidence bundle
+`replay-session-recovery/` shows the chain firing, the fast-forward, and the
+run completing **SUCCESS** with the correct balance.
+
+**Fail-closed geometry.** Frame resolution is strict: a step targeting a
+frame path that no longer exists fails with `FRAME_NOT_FOUND` instead of
+silently acting on a parent surface — the failure mode that made post-expiry
+replays click the wrong screen. For the same reason, the recorded-coordinate
+fallback is legal **only for clicks**; a `fill`/`select`/`press` whose only
+resolution is a coordinate fails with `COORDINATE_FALLBACK_UNSUPPORTED` — a
+coordinate is a point, not a control, and pretending otherwise produced silent
+no-ops. Recorded coordinates carry their space explicitly (frame-local pixels).
+
+**Policy is enforced per interaction, on the target surface.** Before every
+interactive step, replay resolves the step's frame and polices *that frame's
+URL* against the allowlist — the top-level URL of a frameset app never changes,
+so policing it alone would be theatre. An interactive action on a frame that
+redirected to a disallowed origin is blocked before any interaction
+(`POLICY_BLOCKED`, integration-tested with a zero-click assertion).
 
 **Drift** (the rarer case per the brief) is handled by honesty: if only the
 coordinate fallback resolves, the step is marked `degraded` in the result; the
@@ -181,15 +201,24 @@ Mechanics: the automation loop parks on a promise; an `InterventionRequest`
 console** (local HTTP, deliberately minimal); the operator works **the same
 headed browser window** automation was driving — not a copy, not a mock-up of
 co-browsing — then hits *Resume*. The loop re-observes and continues from the
-actual state. While the lease is human, periodic snapshots keep an audit trail
-of what the operator did; the result contract records
-`escalation.resumedByHuman`.
+actual state. While the lease is human, the engine **samples the live session** every
+~1.5 s (screenshot + page-text hash, stored as `human_sample` evidence) —
+the sample series is the audit record of what the operator did, and the result
+contract reports `humanActionsObserved` alongside `resumedByHuman`. The
+escalation callback receives the **real current observation** (screenshot +
+accessibility outline), so the console card shows exactly what automation saw.
 
 End-to-end evidence (`hitl-approval/`): the open-sub-account replay raises
 "risky step requires operator approval" → takeover → approval → resume → the
 native `window.confirm` is accepted and logged → run completes
 `SUCCESS` with `resumedByHuman: true`. The same channel also approves risky
 steps *in place* — approval is a decision, not a config flag.
+
+Every replay result also carries the **sha256 of the exact artifact bytes it
+executed**, and `evidence/manifest.json` ties each scenario to its run,
+artifact hash, expected and actual outcome, and file list —
+`npm run verify:submission` re-checks all of it automatically (provenance
+chains, terminal statuses, referenced screenshots, duplicate runs, secrets).
 
 ## 6. Safety
 
@@ -220,11 +249,13 @@ single-operator demo, a real deployment would broker identities.
 
 What we deliberately left out, and what we'd build next:
 
-1. **Full post-recovery continuation on frameset apps.** The relogin chain
-   re-authenticates and restores the failed step's frame (`gotoStepPage`);
-   restoring *arbitrary remaining multi-page state* after mid-flow expiry is
-   partially implemented and flaky in edge timings. Next: replay-from-nearest-
-   checkpoint — resume from the last verified page state, not the last step.
+1. **Discovery-time risk classification.** Replay enforces risk hard
+   (`RISKY_STEP_BLOCKED` / operator approval), but during *discovery* the
+   risky heuristic is applied at compile time — after the model already acted —
+   and in-loop safety is prompt-guided plus action-type allowlisting. A
+   production system would run the risk classifier against the resolved target
+   *before* the side effect, routing to a human pre-execution. Next: move the
+   compile-time heuristic in front of the act call during discovery.
 2. **Desktop driver.** The port and IR were shaped for it (coordinates,
    semantic outline); no UIA implementation. Next: a Windows UIA driver behind
    the same port, reusing the entire record/verify/compile stack.

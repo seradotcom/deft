@@ -1,0 +1,154 @@
+{
+  "generatedAt": "2026-08-25T01:04:22.650Z",
+  "artifacts": {
+    "legacybank.lookup-member-balance": "489f1bd6bffa368b955e47ddad0a669ef22e61a68fdab83b22e3f5c4231b97f6",
+    "legacybank.open-sub-account": "25b4acbaea4980ee6aa5ecea69fad9cd9cf7e829e832e6c71128a20423ffebc2"
+  },
+  "scenarios": [
+    {
+      "dir": "evidence/discovery",
+      "scenario": "discovery",
+      "runId": "discovery-2026-08-25T00-11-36-087Z-78460b",
+      "capabilityId": "legacybank.lookup-member-balance",
+      "artifactSha256": null,
+      "expectedResult": "LLM run ends DONE; artifact compiled from this run",
+      "actualResult": null,
+      "files": [
+        "log.jsonl",
+        "shots",
+        "transcript.json"
+      ]
+    },
+    {
+      "dir": "evidence/replay-success",
+      "scenario": "replay-success",
+      "runId": "replay-2026-08-25T00-55-59-530Z-748e9a",
+      "capabilityId": "legacybank.lookup-member-balance",
+      "artifactSha256": "b17d2a4e30bdc00c82064a6accd78de528a316aed0c66515b12f01dd1da91191",
+      "expectedResult": "SUCCESS + savingsBalance=$2,450.75, zero degraded steps",
+      "actualResult": "SUCCESS",
+      "files": [
+        "001-entry.png",
+        "002-ok-s1.png",
+        "003-ok-s2.png",
+        "004-ok-s3.png",
+        "005-ok-s4.png",
+        "006-ok-s5.png",
+        "007-ok-s6.png",
+        "008-ok-s7.png",
+        "009-ok-x8.png",
+        "log.jsonl"
+      ]
+    },
+    {
+      "dir": "evidence/replay-business-outcome",
+      "scenario": "replay-business-outcome",
+      "runId": "replay-2026-08-25T00-58-37-558Z-e35ae1",
+      "capabilityId": "legacybank.lookup-member-balance",
+      "artifactSha256": "dc92db60f626fd3ccca0e426bca32ce3ebaaad948a514907943c9d7c4bf4ef42",
+      "expectedResult": "BUSINESS_OUTCOME / MEMBER_NOT_FOUND",
+      "actualResult": "BUSINESS_OUTCOME / MEMBER_NOT_FOUND",
+      "files": [
+        "log.jsonl"
+      ]
+    },
+    {
+      "dir": "evidence/replay-session-recovery",
+      "scenario": "replay-session-recovery",
+      "runId": "replay-2026-08-25T00-43-53-917Z-5b445d",
+      "capabilityId": "legacybank.lookup-member-balance",
+      "artifactSha256": "f9409863d49b2fee497d9ff12e3b006edc8f54efa62648c572a945e38109d508",
+      "expectedResult": "mid-flow expiry → relogin chain → SUCCESS",
+      "actualResult": "SUCCESS",
+      "files": [
+        "001-entry.png",
+        "002-ok-s1.png",
+        "003-ok-s2.png",
+        "004-ok-s3.png",
+        "005-recovered-s4.png",
+        "006-ok-s5.png",
+        "007-ok-s6.png",
+        "008-ok-s7.png",
+        "009-ok-x8.png",
+        "log.jsonl"
+      ]
+    },
+    {
+      "dir": "evidence/replay-cross-tenant",
+      "scenario": "replay-cross-tenant",
+      "runId": "replay-2026-08-25T00-25-57-284Z-a88a79",
+      "capabilityId": "legacybank.lookup-member-balance",
+      "artifactSha256": "33c04aed70e96bef349c53c487aa21113bde5bfa969bfc51bee0443c67ccfbf0",
+      "expectedResult": "tenant=nw variant → SUCCESS, same balance",
+      "actualResult": "SUCCESS",
+      "files": [
+        "001-entry.png",
+        "002-ok-s1.png",
+        "003-ok-s2.png",
+        "004-ok-s3.png",
+        "005-ok-s4.png",
+        "006-ok-s5.png",
+        "007-ok-s6.png",
+        "008-ok-s7.png",
+        "009-ok-x8.png",
+        "log.jsonl"
+      ]
+    },
+    {
+      "dir": "evidence/risky-gating",
+      "scenario": "risky-gating",
+      "runId": "replay-2026-08-25T00-56-08-102Z-8c2562",
+      "capabilityId": "legacybank.open-sub-account",
+      "artifactSha256": "3b9f55eeb5f8ef714ac88be6df9f9bcedc97e6f927dbf38c9415d98566c013eb",
+      "expectedResult": "FAILED / RISKY_STEP_BLOCKED at the irreversible confirm",
+      "actualResult": "FAILED",
+      "files": [
+        "001-entry.png",
+        "002-ok-l1.png",
+        "003-ok-l2.png",
+        "004-ok-l3.png",
+        "005-ok-s4.png",
+        "006-ok-s5.png",
+        "007-ok-s6.png",
+        "008-ok-s7.png",
+        "009-ok-s8.png",
+        "010-ok-s9.png",
+        "011-ok-s10.png",
+        "012-ok-s11.png",
+        "013-ok-s12.png",
+        "log.jsonl"
+      ]
+    },
+    {
+      "dir": "evidence/hitl-approval",
+      "scenario": "hitl-approval",
+      "runId": "replay-2026-08-25T00-56-47-388Z-9bfd4a",
+      "capabilityId": "legacybank.open-sub-account",
+      "artifactSha256": "1ab2b2e671771f831377b54a75b0d3765d53e2643e14dc936ed9b26eecd8e4ea",
+      "expectedResult": "operator approval via console → SUCCESS, resumedByHuman=true, human samples captured",
+      "actualResult": "SUCCESS",
+      "files": [
+        "001-entry.png",
+        "002-ok-l1.png",
+        "003-ok-l2.png",
+        "004-ok-l3.png",
+        "005-ok-s4.png",
+        "006-ok-s5.png",
+        "007-ok-s6.png",
+        "008-ok-s7.png",
+        "009-ok-s8.png",
+        "010-ok-s9.png",
+        "011-ok-s10.png",
+        "012-ok-s11.png",
+        "013-ok-s12.png",
+        "014-human-01.png",
+        "015-human-02.png",
+        "016-human-03.png",
+        "017-human-04.png",
+        "018-human-05.png",
+        "019-ok-s13.png",
+        "log.jsonl"
+      ]
+    }
+  ]
+}

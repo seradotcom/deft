@@ -6,7 +6,7 @@
     "name": "Open a sub-account for a member",
     "description": "Signs into LegacyBank core, opens the member record, fills the new sub-account form (type, nickname, initial deposit), reviews, and confirms the irreversible opening through the native confirmation dialog.",
     "version": "1.0.0",
-    "status": "draft",
+    "status": "needs-review",
     "createdAt": "2026-08-24T00:21:17.639Z",
     "updatedAt": "2026-08-24T00:21:17.639Z",
     "notes": "Operator-authored: descriptors captured live with record-time verified probing (no LLM in the loop)."
@@ -903,10 +903,10 @@
     "recordedAt": "2026-08-24T00:21:17.639Z",
     "stepCount": 13,
     "validation": {
-      "lastReplayAt": "2026-08-24T00:28:30.430Z",
+      "lastReplayAt": "2026-08-25T00:57:13.727Z",
       "lastReplayStatus": "SUCCESS",
-      "replaySuccessCount": 1,
-      "replayFailureCount": 2
+      "replaySuccessCount": 2,
+      "replayFailureCount": 3
     }
   }
 }

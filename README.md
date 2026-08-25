@@ -83,11 +83,20 @@ npm run replay -- legacybank.open-sub-account --input memberId=M10041 \
   --input "nickname=Vacation fund" --input deposit=100
 # → FAILED / RISKY_STEP_BLOCKED at the confirm step
 
-# With an operator in the loop: the console raises an intervention;
-# take control, approve, resume → the run completes.
+# With an operator in the loop: the console raises an intervention with the
+# REAL live observation; the browser is headed — take control of the actual
+# window, approve, resume → the run completes with a human-action audit.
 npm run replay -- legacybank.open-sub-account --input memberId=M10041 \
-  --input "nickname=Vacation fund" --input deposit=100 --escalate
+  --input "nickname=Vacation fund" --input deposit=100 --escalate --headed
 # operator console: http://localhost:7790
+```
+
+### Verify the evidence package
+
+```bash
+npm run verify:submission
+# ✓ provenance chains · artifact sha256 per run · terminal statuses
+# ✓ referenced screenshots exist · no duplicated runs · no secrets
 ```
 
 ### Tests (offline)
@@ -112,7 +121,8 @@ src/
   evidence/    structured JSONL logs + screenshot store per run
   targets/     LegacyBank: hostile two-tenant legacy simulator with fault injection
 capabilities/  stored capability artifacts (the deliverable data)
-evidence/      curated bundles: discovery, replays, outcomes, recovery, HITL
+evidence/      curated bundles + manifest: discovery, replays, outcomes, HITL
+scripts/       verify-submission: automated integrity check of the package
 ```
 
 Design decisions, trade-offs and cuts: **[REPORT.md](REPORT.md)**.

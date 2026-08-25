@@ -16,11 +16,11 @@ import {
 } from '../core/artifact.js';
 import type { Locator } from 'playwright';
 import { interpolate, resolveDescriptor, idPatternMatches } from '../surface/targeting.js';
-import { resolveFrameByPath } from '../surface/targeting.js';
+import { resolveFrameByPathStrict } from '../surface/targeting.js';
 import { gridToPx } from '../surface/driver.js';
 
-function resolveFrameByPathPublic(page: import('playwright').Page, path: string[]): import('playwright').Frame {
-  return resolveFrameByPath(page, path);
+function resolveFrameByPathPublic(page: import('playwright').Page, path: string[]): import('playwright').Frame | null {
+  return resolveFrameByPathStrict(page, path);
 }
 function gridToPxViewport(x999: number, y999: number): { x: number; y: number } {
   return {
@@ -59,8 +59,10 @@ export async function replayCapability(
     }
 
     if (status === 'SUCCESS') {
+      let stepIndex = 0;
       for (const step of artifact.steps) {
-        const outcome = await runStep(ctx, artifact, opts, step);
+        const outcome = await runStep(ctx, artifact, opts, step, stepIndex);
+        stepIndex += 1;
         if (outcome.kind === 'business') {
           status = 'BUSINESS_OUTCOME';
           businessOutcome = outcome.business;
@@ -94,28 +96,36 @@ export async function replayCapability(
       }
     }
 
-    // Provenance feedback: artifacts learn from their replays.
+    // Provenance feedback: artifacts learn from their replays. The result is
+    // cryptographically tied to the exact artifact bytes via sha256.
     try {
+      const cryptoMod = await import('node:crypto');
       const fsMod = await import('node:fs');
       const storePath = process.env.DEFT_CAPABILITIES_DIR ?? 'capabilities';
       const file = `${storePath}/${artifact.metadata.id}.json`;
       if (fsMod.existsSync(file)) {
-        const onDisk = JSON.parse(fsMod.readFileSync(file, 'utf8')) as CapabilityArtifact;
+        const artifactBytes = fsMod.readFileSync(file);
+        const artifactSha256 = cryptoMod.createHash('sha256').update(artifactBytes).digest('hex');
+        const onDisk = JSON.parse(artifactBytes.toString('utf8')) as CapabilityArtifact;
         onDisk.provenance.validation.lastReplayAt = new Date().toISOString();
         onDisk.provenance.validation.lastReplayStatus = status;
         if (status === 'SUCCESS' || status === 'BUSINESS_OUTCOME') {
           onDisk.provenance.validation.replaySuccessCount += 1;
-          if (onDisk.metadata.status === 'draft' && onDisk.provenance.validation.replaySuccessCount >= 2) {
+          // Degraded success is NOT clean success: coordinate-resolved steps
+          // mean the semantic targeting aged — review, don't promote.
+          if (ctx.degradedSteps.length > 0) {
+            onDisk.metadata.status = 'needs-review';
+          } else if (onDisk.metadata.status === 'draft' && onDisk.provenance.validation.replaySuccessCount >= 2) {
             onDisk.metadata.status = 'approved';
           }
         } else {
           onDisk.provenance.validation.replayFailureCount += 1;
-          if (ctx.degradedSteps.length > 0 || onDisk.provenance.validation.replayFailureCount >= 3) {
+          if (onDisk.provenance.validation.replayFailureCount >= 3) {
             onDisk.metadata.status = 'needs-review';
           }
         }
         fsMod.writeFileSync(file, JSON.stringify(onDisk, null, 2));
-        ctx.evidence.write({ type: 'provenance_updated', status, degradedSteps: ctx.degradedSteps.length });
+        ctx.evidence.write({ type: 'provenance_updated', status, artifactSha256, degradedSteps: ctx.degradedSteps.length });
       }
     } catch {
       /* provenance update is best-effort */
@@ -128,6 +138,7 @@ export async function replayCapability(
     runId: ctx.evidence.runId,
     capabilityId: artifact.metadata.id,
     capabilityVersion: artifact.metadata.version,
+    artifactSha256: opts.artifactSha256,
     status,
     outputs: status === 'SUCCESS' ? ctx.outputs : undefined,
     businessOutcome,
@@ -157,7 +168,8 @@ async function runStep(
   ctx: Ctx,
   artifact: CapabilityArtifact,
   opts: ReplayOptions & { allowRisky?: boolean },
-  step: Step
+  step: Step,
+  stepIndex = 0
 ): Promise<StepOutcome> {
   const t0 = Date.now();
   ctx.evidence.write({ type: 'step_start', stepId: step.id, intent: step.intent, action: step.action });
@@ -172,15 +184,8 @@ async function runStep(
     if (opts.onEscalation && !ctx.recoveryAttempts.has(`risky:${step.id}`)) {
       ctx.recoveryAttempts.set(`risky:${step.id}`, 1);
       const reason = `risky step "${step.intent}" requires operator approval`;
-      ctx.evidence.write({ type: 'escalation_request', stepId: step.id, reason });
-      const approved = await opts.onEscalation({ reason });
+      const approved = await escalateToHuman(ctx, opts, step, reason);
       if (approved) {
-        ctx.escalation = ctx.escalation ?? {
-          interventionId: `risky-${step.id}`,
-          reason,
-          resumedByHuman: true,
-          humanActionsObserved: 0,
-        };
         ctx.evidence.write({ type: 'risky_approved_by_operator', stepId: step.id });
         // fall through: approval granted for this step
       } else {
@@ -273,6 +278,12 @@ async function runStep(
       }
     }
 
+    // Surface events (native dialogs, crashes) are first-class evidence.
+    const surfEvents = ctx.driver.drainEvents();
+    if (surfEvents.length > 0) {
+      ctx.evidence.write({ type: 'surface_events', stepId: step.id, events: surfEvents });
+    }
+
     if (step.postCheck && step.action !== 'check') {
       const ok = await runCheck(ctx, artifact, opts, step.postCheck);
       if (!ok) {
@@ -316,7 +327,7 @@ async function runStep(
         detail: recovered,
       });
       // Retry the step once after recovery by tail-recursing through loop guard.
-      const retry = await runStepRetry(ctx, artifact, opts, step, t0);
+      const retry = await runStepRetry(ctx, artifact, opts, step, stepIndex, t0);
       return retry;
     }
     // 2) business outcome detection — an "expected failure" is an answer
@@ -330,16 +341,9 @@ async function runStep(
     if (opts.onEscalation && !ctx.recoveryAttempts.has(`esc:${step.id}`)) {
       ctx.recoveryAttempts.set(`esc:${step.id}`, 1);
       const reason = `replay stuck at step ${step.id} ("${step.intent}"): ${shortMsg(err)}`;
-      ctx.evidence.write({ type: 'escalation_request', stepId: step.id, reason });
-      const resumed = await opts.onEscalation({ reason });
+      const resumed = await escalateToHuman(ctx, opts, step, reason);
       if (resumed) {
-        ctx.escalation = ctx.escalation ?? {
-          interventionId: `esc-${step.id}`,
-          reason,
-          resumedByHuman: true,
-          humanActionsObserved: 0,
-        };
-        return runStepRetry(ctx, artifact, opts, step, t0);
+        return runStepRetry(ctx, artifact, opts, step, stepIndex, t0);
       }
     }
     // 4) hard failure
@@ -348,14 +352,36 @@ async function runStep(
   }
 }
 
+/**
+ * Post-recovery retry: re-executes the deterministic flow from the first
+ * non-login step up to the failed one (fast-forward), so POST-arrival pages
+ * are re-reached by re-running the flow instead of blind GET navigation
+ * ("Cannot GET /results.aspx" taught us this). Then retries the failed step
+ * through the SAME guarded executor.
+ */
 async function runStepRetry(
   ctx: Ctx,
   artifact: CapabilityArtifact,
   opts: ReplayOptions & { allowRisky?: boolean },
   step: Step,
+  stepIndex: number,
   t0: number
 ): Promise<StepOutcome> {
   try {
+    for (let j = 0; j < stepIndex; j++) {
+      const prev = artifact.steps[j]!;
+      // The chain already re-authenticated: skip login-page steps entirely.
+      if (prev.pageUrl && /login\.aspx/i.test(prev.pageUrl)) continue;
+      if (['extract', 'check', 'wait', 'scroll'].includes(prev.action)) continue;
+      try {
+        await executeStepBody(ctx, artifact, opts, prev);
+        const surf = ctx.driver.drainEvents();
+        if (surf.length) ctx.evidence.write({ type: 'surface_events', stepId: prev.id, fastForward: true, events: surf });
+        if (prev.action === 'click' || prev.action === 'press') await ctx.driver.waitForLoadStateSettle();
+      } catch (err) {
+        ctx.evidence.write({ type: 'fast_forward_skip', stepId: prev.id, reason: shortMsg(err) });
+      }
+    }
     const outcome = await executeStepBody(ctx, artifact, opts, step);
     if (outcome !== null) return outcome;
     ctx.timeline.push({
@@ -407,6 +433,8 @@ async function executeStepBody(
         const label = interpolate(step.selectOptionText ?? '', c);
         await loc.selectOption({ label }).catch(() => loc.selectOption(label));
       } else await loc.press(step.keyCombo ?? 'Enter');
+      // Same settle discipline as the main path — post-recovery retries race
+      // frame navigations exactly like first attempts do.
       if (step.action !== 'fill' && step.action !== 'select') {
         await ctx.driver.waitForLoadStateSettle();
       }
@@ -434,6 +462,27 @@ async function locate(
   opts: ReplayOptions,
   step: Step
 ): Promise<LocateOutcome> {
+  // Fail-closed frame resolution + policy check on the TARGET surface.
+  // Frameset reality: the top URL can stay on an allowed page while a frame
+  // redirects somewhere else — the frame's own URL is what must be policed.
+  const fp = step.target!.scope.framePath ?? [];
+  if (fp.length > 0) {
+    const frame = resolveFrameByPathStrict(ctx.driver.page, fp);
+    if (!frame) {
+      const ref = await shot(ctx, `fail-frame-${step.id}`);
+      return {
+        outcome: fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', `frame path [${fp.join('>')}]`, 'frame missing (redirect/navigation changed the shell)', [ref]),
+      };
+    }
+    if (!ctx.policy.isUrlAllowed(frame.url())) {
+      const ref = await shot(ctx, `fail-policy-${step.id}`);
+      ctx.evidence.write({ type: 'policy_blocked_frame', stepId: step.id, frameUrl: frame.url() });
+      return {
+        outcome: fail(ctx, step, 'locate', 'POLICY_BLOCKED', `frame url within ${fp.join('>')}`, `disallowed frame url: ${frame.url()}`, [ref]),
+      };
+    }
+  }
+
   const res = await resolveDescriptor(ctx.driver.page, step.target!, { timeoutMs: 9000 });
   if (res.status === 'resolved' && res.locator) {
     ctx.evidence.write({
@@ -445,6 +494,23 @@ async function locate(
     return { mode: 'locator', locator: res.locator };
   }
   if (res.status === 'coordinate-fallback') {
+    // A recorded coordinate is a POINT, not a control. Clicking through it is
+    // an honest degraded mode; fill/select/press need the actual element —
+    // pretending otherwise produced silent no-ops.
+    if (step.action !== 'click') {
+      const ref = await shot(ctx, `fail-coord-${step.id}`);
+      return {
+        outcome: fail(
+          ctx,
+          step,
+          'locate',
+          'COORDINATE_FALLBACK_UNSUPPORTED',
+          `semantic target for ${step.action}`,
+          'only the coordinate fallback resolved; coordinate targeting cannot safely perform a data action',
+          [ref]
+        ),
+      };
+    }
     // Before blind-clicking, check whether the page is already telling us a
     // declared business outcome ("no such member" needs no click).
     const probeBiz = await pageProbe(ctx);
@@ -469,6 +535,7 @@ async function locate(
       let px: { x: number; y: number } | null = null;
       try {
         const frame = resolveFrameByPathPublic(ctx.driver.page, step.target!.scope.framePath ?? []);
+        if (!frame) throw new Error('frame gone');
         const fe = await frame.frameElement();
         const box = await fe.asElement()?.boundingBox();
         if (box) {
@@ -585,9 +652,14 @@ async function runRecoveryActions(
       const fp = step.target?.scope.framePath ?? [];
       if (fp.length > 0) {
         // Return the FRAME to the step's page (frameset apps keep the shell).
-        const parent = resolveFrameByPathPublic(ctx.driver.page, fp.slice(0, -1));
-        const leaf = fp[fp.length - 1]!;
-        const target = parent.childFrames().find((f) => f.name() === leaf || f.url() === leaf);
+        // The frameset children attach ASYNC after the relogin POST — poll.
+        let target: import('playwright').Frame | undefined;
+        for (let i = 0; i < 40 && !target; i++) {
+          const parent = resolveFrameByPathPublic(ctx.driver.page, fp.slice(0, -1));
+          const leaf = fp[fp.length - 1]!;
+          target = parent?.childFrames().find((f) => f.name() === leaf || f.url() === leaf);
+          if (!target) await new Promise((r) => setTimeout(r, 150));
+        }
         if (target) {
           await target.evaluate(`window.location.href = ${JSON.stringify(url)}`).catch((e) => {
             ctx.evidence.write({ type: 'goto_step_page_error', stepId: step.id, message: (e as Error).message?.slice(0, 150) });
@@ -600,7 +672,7 @@ async function runRecoveryActions(
           });
           continue;
         }
-        ctx.evidence.write({ type: 'goto_step_page_error', stepId: step.id, message: 'target frame not found' });
+        ctx.evidence.write({ type: 'goto_step_page_error', stepId: step.id, message: 'target frame not found after poll' });
       }
       await ctx.driver.act({ type: 'navigate', url });
     } else {
@@ -617,6 +689,84 @@ async function runRecoveryActions(
       if (act.action === 'click') await ctx.driver.waitForLoadStateSettle();
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Human-in-the-loop escalation (real observation + live-session audit sampler)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hands the live session to a human: captures the REAL current observation,
+ * then samples the session (screenshot + a11y outline) while the operator has
+ * control — the sample diff IS the audit record of what the human did.
+ * Returns true when the operator resumed (approval or fix applied).
+ */
+async function escalateToHuman(
+  ctx: Ctx,
+  opts: ReplayOptions,
+  step: Step,
+  reason: string
+): Promise<boolean> {
+  if (!opts.onEscalation) return false;
+  const observation = await ctx.driver.observe();
+  ctx.evidence.write({ type: 'escalation_request', stepId: step.id, reason, urlAtPause: observation.url });
+
+  const samples: string[] = [];
+  let sampling = true;
+  const sampler = (async () => {
+    let n = 0;
+    while (sampling) {
+      await new Promise((r) => setTimeout(r, 1500));
+      if (!sampling) break;
+      n += 1;
+      try {
+        const shot = await ctx.driver.screenshot();
+        const ref = await ctx.evidence.saveShot(shot.base64, `human-${String(n).padStart(2, '0')}`);
+        const outline = await ctx.driver.page.locator('body').innerText({ timeout: 1000 }).catch(() => '');
+        samples.push(ref);
+        ctx.evidence.write({
+          type: 'human_sample',
+          stepId: step.id,
+          n,
+          shot: ref,
+          textHash: hashOf(outline),
+          url: ctx.driver.page.url(),
+        });
+      } catch {
+        /* page mid-navigation — next sample */
+      }
+    }
+  })();
+
+  let approved = false;
+  try {
+    approved = await opts.onEscalation({ reason, observation });
+  } finally {
+    sampling = false;
+    await sampler;
+  }
+
+  ctx.escalation = ctx.escalation ?? {
+    interventionId: `esc-${step.id}`,
+    reason,
+    resumedByHuman: approved,
+    humanActionsObserved: samples.length,
+  };
+  ctx.evidence.write({
+    type: 'escalation_resolved',
+    stepId: step.id,
+    approved,
+    humanSamples: samples.length,
+    samples,
+  });
+  return approved;
+}
+
+function hashOf(s: string): string {
+  // Cheap stability signal for the audit diff (not cryptographic).
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16);
 }
 
 // ---------------------------------------------------------------------------
@@ -677,3 +827,9 @@ export async function shot(ctx: Ctx, tag: string): Promise<string> {
   ctx.lastShots.push(rel);
   return rel;
 }
+
+
+
+
+
+

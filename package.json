@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify:submission": "node scripts/verify-submission.mjs",
     "target:start": "node dist/targets/legacybank/server.js",
     "agent:discover": "node dist/cli/index.js discover",
     "replay": "node dist/cli/index.js replay",
@@ -29,3 +30,4 @@
     "vitest": "^4.0.18"
   }
 }
+

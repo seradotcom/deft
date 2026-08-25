@@ -201,7 +201,7 @@ describe('deterministic replay (integration)', () => {
   it('session recovery: mid-flow expiry → relogin chain + fast-forward → SUCCESS', async () => {
     // Use M10087 — prior tests contaminate M10041 with sub-accounts, and the
     // ambiguity rejection correctly refuses a non-unique Savings row match.
-    process.env.LEGACYBANK_SESSION_TIMEOUT_MS = '60000';
+    process.env.LEGACYBANK_SESSION_TIMEOUT_MS = '3000';
     try {
       const { artifact } = loadArtifactBytes();
       const runPromise = replayCapability(artifact, {
@@ -229,6 +229,7 @@ describe('deterministic replay (integration)', () => {
     }
   }, 120_000);
 });
+
 
 
 

@@ -111,7 +111,12 @@ export function templateCtx(
 export function applyVariant(artifact: CapabilityArtifact, tenantId?: string): CapabilityArtifact {
   if (!tenantId) return artifact;
   const variant = artifact.target.variants?.find((v) => v.match.tenantId === tenantId);
-  if (!variant) return artifact;
+  // Fail closed: an explicitly requested tenant with no variant is a caller
+  // error — silently running the base artifact for the WRONG institution
+  // is exactly the multi-tenant failure mode this system exists to prevent.
+  if (!variant) {
+    throw new Error(`UNKNOWN_TENANT_VARIANT: no variant declared for tenant '${tenantId}'`);
+  }
   const clone = JSON.parse(JSON.stringify(artifact)) as Record<string, unknown>;
   const steps = clone.steps as Array<{ id: string }>;
   for (const [flatKey, value] of Object.entries(variant.patches)) {
@@ -121,7 +126,8 @@ export function applyVariant(artifact: CapabilityArtifact, tenantId?: string): C
     });
     setFlatPath(clone, resolved, value);
   }
-  return clone as unknown as CapabilityArtifact;
+  // Patches are code-by-data: revalidate the merged artifact.
+  return CapabilityArtifactSchema.parse(clone);
 }
 
 function setFlatPath(obj: Record<string, unknown>, flatKey: string, value: unknown): void {

@@ -106,6 +106,7 @@ export interface SurfaceEvent {
   kind: 'dialog' | 'navigation' | 'crash';
   detail: string;
   at: string;
+  accepted?: boolean;
 }
 
 /** Raw execution outcome of one agent action on the live surface. */

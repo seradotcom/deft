@@ -60,10 +60,16 @@ export class PolicyEngine {
     } catch {
       return false;
     }
+    // Denylist: harness endpoints must never be reachable by automation.
+    if (parsed.pathname.includes('/admin/')) return false;
     return this.cfg.allowedUrlPrefixes.some((prefix) => {
       try {
         const p = new URL(prefix);
-        return parsed!.origin === p.origin && parsed!.pathname.startsWith(p.pathname);
+        if (parsed!.origin !== p.origin) return false;
+        // Exact path boundary: /acme must NOT match /acmeevil
+        const allowedPath = p.pathname.replace(/\/$/, '');
+        const actualPath = parsed!.pathname;
+        return actualPath === allowedPath || actualPath.startsWith(allowedPath + '/');
       } catch {
         return url.startsWith(prefix);
       }
@@ -79,3 +85,4 @@ export function defaultPolicy(baseUrl: string): PolicyEngine {
     allowRiskyActions: false,
   });
 }
+

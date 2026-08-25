@@ -90,6 +90,7 @@ export function compileCapability(
         recoverableErrors: [],
         riskClass: riskyHeuristic(rs) ? 'risky' : 'safe',
         idempotent: !riskyHeuristic(rs),
+        expectsDialog: false,
       });
       continue;
     }
@@ -110,6 +111,7 @@ export function compileCapability(
         : [],
       riskClass: riskyHeuristic(rs) ? 'risky' : 'safe',
       idempotent: !riskyHeuristic(rs),
+        expectsDialog: false,
     };
 
     if (rs.action.type === 'type') {
@@ -135,6 +137,7 @@ export function compileCapability(
         recoverableErrors: (step.recoverableErrors ?? []) as Step['recoverableErrors'],
         riskClass: 'safe',
         idempotent: false,
+        expectsDialog: false,
       });
     }
   }
@@ -164,6 +167,7 @@ export function compileCapability(
         columnHeader: binding.colHeader,
       },
       idempotent: true,
+        expectsDialog: false,
       recoverableErrors: [
         { chainRef: 'relogin', description: 're-login after session expiry' },
       ] as Step['recoverableErrors'],
@@ -268,6 +272,7 @@ export function compileCapability(
       recoverableErrors: [],
       riskClass: 'safe',
       idempotent: true,
+        expectsDialog: false,
     }));
     (artifact as { authPhase?: { steps: Step[] } }).authPhase = { steps: authPhaseSteps };
   }
@@ -427,6 +432,9 @@ function redactDescriptorValues(d: TargetDescriptor): TargetDescriptor {
   delete (clone as Record<string, unknown>).capturedValue;
   return clone;
 }
+
+
+
 
 
 

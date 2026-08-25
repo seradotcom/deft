@@ -170,6 +170,53 @@ export async function replayCapability(
     }
   }
 
+  // Output contract: SUCCESS only if the extracted values satisfy the
+  // artifact's declared output schema.
+  if (status === 'SUCCESS') {
+    try {
+      validateOutputs(artifact, ctx.outputs);
+    } catch (err) {
+      status = 'FAILED';
+      failure = {
+        stepId: 'outputs',
+        phase: 'verify',
+        errorClass: 'OUTPUT_CONTRACT_VIOLATION',
+        expected: 'outputs matching artifact.outputs schema',
+        observed: (err as Error).message,
+        evidenceRefs: [],
+      };
+    }
+  }
+    // Validation ledger: the artifact is IMMUTABLE — runtime history lives in
+    // an append-only sidecar, cryptographically tied to the exact bytes.
+    // Approval state is DERIVED from the ledger, never written into the
+    // definition (no byte drift between runs of the same capability).
+    try {
+      const cryptoMod = await import('node:crypto');
+      const fsMod = await import('node:fs');
+      const storePath = process.env.DEFT_CAPABILITIES_DIR ?? 'capabilities';
+      const file = `${storePath}/${artifact.metadata.id}.json`;
+      if (fsMod.existsSync(file)) {
+        const artifactSha256 = cryptoMod.createHash('sha256').update(fsMod.readFileSync(file)).digest('hex');
+        const ledgerPath = `${storePath}/${artifact.metadata.id}.validation.jsonl`;
+        fsMod.appendFileSync(
+          ledgerPath,
+          JSON.stringify({
+            at: new Date().toISOString(),
+            runId: ctx.evidence.runId,
+            tenant: opts.tenantId ?? 'base',
+            status,
+            degradedSteps: ctx.degradedSteps,
+            escalated: ctx.escalation?.resumedByHuman ?? false,
+            artifactSha256,
+          }) + '\n'
+        );
+        ctx.evidence.write({ type: 'ledger_appended', status, artifactSha256, degradedSteps: ctx.degradedSteps.length });
+      }
+    } catch {
+      /* ledger append is best-effort */
+    }
+
   const result: ReplayResult = {
     runId: ctx.evidence.runId,
     capabilityId: artifact.metadata.id,
@@ -247,6 +294,7 @@ async function runStep(
       case 'fill':
       case 'select':
       case 'press': {
+        if (step.expectsDialog) ctx.driver.acceptNextDialog();
         if (!step.target) {
           return fail(ctx, step, 'locate', 'ARTIFACT_INVALID', 'target descriptor', 'missing', []);
         }
@@ -749,6 +797,7 @@ async function runRecoveryActions(
         recoverableErrors: [],
         riskClass: 'safe',
         idempotent: true,
+        expectsDialog: false,
       };
       const outcome = await runStep(ctx, artifact, { ...opts, onEscalation: undefined }, pseudoStep, 0, {
         disableRecovery: true,
@@ -913,6 +962,7 @@ export async function shot(ctx: Ctx, tag: string): Promise<string> {
   ctx.lastShots.push(rel);
   return rel;
 }
+
 
 
 

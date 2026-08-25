@@ -239,6 +239,16 @@ export async function resolveDescriptor(
     }
     try {
       const loc = translateSpec(root as Frame, spec);
+      // Ambiguity rejection: count matches BEFORE acting. A selector that
+      // matches >1 elements is ambiguous — even if the first looks right.
+      const count = await loc.count();
+      if (count === 0) {
+        await loc.first().waitFor({ state: 'visible', timeout: timeoutMs });
+      }
+      if (count > 1) {
+        attempts.push({ spec, why: `AMBIGUOUS: ${count} matches` });
+        continue;
+      }
       await loc.first().waitFor({ state: 'visible', timeout: timeoutMs });
       if (desc.fingerprint) {
         const score = await scoreAgainstFingerprint(loc.first(), desc.fingerprint);

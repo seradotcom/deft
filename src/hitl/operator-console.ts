@@ -46,6 +46,7 @@ export class OperatorConsole {
   start(): Promise<void> {
     this.app = express();
     this.app.use(express.json());
+    this.app.use('/evidence', express.static(this.evidenceDir));
 
     this.app.get('/', (_req: Request, res: Response) => {
       const items = [...this.interventions.values()].map((i) => renderCard(i)).join('\n');
@@ -86,7 +87,7 @@ export class OperatorConsole {
 
     return new Promise((resolve) => {
       this.server = createServer(this.app);
-      this.server.listen(this.port, () => resolve());
+      this.server.listen(this.port, '127.0.0.1', () => resolve());
     });
   }
 
@@ -141,8 +142,8 @@ function renderCard(i: InterventionRequest): string {
   return `
 <div style="border:1px solid #444;padding:12px;margin:12px 0;background:#1d2330;color:#e7ecf3">
   <h3>${i.source} · ${i.status}</h3>
-  <p><b>Why:</b> ${i.reason}</p>
-  <p><b>URL:</b> ${i.urlAtPause}</p>
+  <p><b>Why:</b> ${escapeHtml(i.reason)}</p>
+  <p><b>URL:</b> ${escapeHtml(i.urlAtPause)}</p>
   ${shotHtml}
   <details><summary>Accessibility outline</summary><pre style="font-size:10px">${escapeHtml(i.a11yOutline ?? '')}</pre></details>
   <button onclick="fetch('/api/interventions/${i.id}/takeover',{method:'POST'}).then(()=>alert('You are IN CONTROL of the live window. Do what is needed, then come back here.'))">Take control</button>
@@ -161,3 +162,4 @@ const HTML_SHELL = `<!doctype html><html><head><title>DEFT Operator Console</tit
 <p style="color:#9fb0c3">Live-session handoff. Take control operates the SAME window automation was driving.</p>
 <!--CARDS-->
 </body></html>`;
+

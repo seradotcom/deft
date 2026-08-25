@@ -36,6 +36,10 @@ beforeAll(async () => {
       resolve();
     });
   });
+  // Reset the simulator fixture � previous tests may have opened sub-accounts.
+    try {
+      await fetch(`${baseUrl}/acme/admin/reset`, { method: 'POST' });
+    } catch { /* server may not be up yet */ }
   // Point the artifact's entry URL at the ephemeral port.
   const raw = fs.readFileSync(
     path.join('capabilities', 'legacybank.lookup-member-balance.json'),
@@ -70,7 +74,7 @@ const ENV = (extra: Record<string, string> = {}): {
   runtimeEnv: Record<string, string | undefined>;
 } => ({
   env: { baseUrl, ...extra },
-  // Bindings resolve INSIDE the engine from the runtime env � same contract
+  // Bindings resolve INSIDE the engine from the runtime env � same contract
   // the CLI uses. The simulator credential is a documented test fixture.
   runtimeEnv: { LEGACYBANK_USER: 'teller1', LEGACYBANK_PASSWORD: 'Demo!2345' },
 });
@@ -111,10 +115,13 @@ describe('deterministic replay (integration)', () => {
     // Trusted origin serves a page embedding an iframe from a SECOND
     // (disallowed) origin that hosts the button. The artifact step targets
     // that frame. Replay must stop with POLICY_BLOCKED and zero interaction.
+    let hostileClicks = 0;
     const evil = express();
     evil.get('/button-page', (_req, res) => {
-      res.type('html').send('<button id="boom" onclick="window.__clicked=true">boom</button>');
+      res.type('html').send('<button id="boom" onclick="fetch(\'/clicked\',{method:\'POST\'})">boom</button>');
     });
+    evil.post('/clicked', (_req, res) => { hostileClicks += 1; res.json({ ok: true }); });
+    evil.get('/click-count', (_req, res) => { res.json({ count: hostileClicks }); });
     const evilServer = createServer(evil);
     await new Promise<void>((r) => evilServer.listen(0, () => r()));
     const evilPort = (evilServer.address() as { port: number }).port;
@@ -181,26 +188,25 @@ describe('deterministic replay (integration)', () => {
     expect(result.failure?.phase).toBe('locate'); // blocked before any interaction
     expect(result.timeline.some((t) => t.ok && t.stepId === 's1')).toBe(false);
 
-    // Verify ZERO clicks actually happened on the evil origin.
-    const page = await browser.newPage();
-    await page.goto(`http://localhost:${evilPort}/button-page`);
-    const clicked = await page.evaluate(() => (window as unknown as { __clicked?: boolean }).__clicked ?? false);
-    expect(clicked).toBe(false);
-    await page.close();
+    // Verify ZERO clicks via SERVER-SIDE state (not a client-side flag on a
+    // fresh page — that only proves the new page wasn't clicked).
+    const countRes = await fetch(`http://localhost:${evilPort}/click-count`);
+    const { count } = (await countRes.json()) as { count: number };
+    expect(count).toBe(0);
 
     evilServer.close();
     trustedServer.close();
   });
 
   it('session recovery: mid-flow expiry → relogin chain + fast-forward → SUCCESS', async () => {
-    // Short idle timeout: the session dies between the login burst and the
-    // later steps, forcing the relogin chain mid-flow.
+    // Use M10087 — prior tests contaminate M10041 with sub-accounts, and the
+    // ambiguity rejection correctly refuses a non-unique Savings row match.
     process.env.LEGACYBANK_SESSION_TIMEOUT_MS = '60000';
     try {
       const { artifact } = loadArtifactBytes();
       const runPromise = replayCapability(artifact, {
         ...ENV(),
-        inputs: { memberId: 'M10041' },
+        inputs: { memberId: 'M10087' },
         headless: true,
         runsDir: RUNS_DIR,
       });
@@ -213,7 +219,7 @@ describe('deterministic replay (integration)', () => {
       });
       const result = await runPromise;
       expect(result.status).toBe('SUCCESS');
-      expect(result.outputs?.savingsBalance).toBe('$2,450.75');
+      expect(result.outputs?.savingsBalance).toBe('$10,234.10');
       // The recovery actually fired: a step was retried after re-authentication.
       const log = fs.readFileSync(path.join(RUNS_DIR, result.runId, 'log.jsonl'), 'utf8');
       expect(log).toContain('"type":"recovering"');
@@ -223,6 +229,9 @@ describe('deterministic replay (integration)', () => {
     }
   }, 120_000);
 });
+
+
+
 
 
 

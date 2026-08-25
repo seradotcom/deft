@@ -34,6 +34,8 @@ export interface SurfaceDriver {
   bringToFront(): Promise<void>;
   screenshot(): Promise<{ base64: string }>;
   drainEvents(): SurfaceEvent[];
+  /** One-shot: accept the next native dialog (for steps that expect one). */
+  acceptNextDialog(): void;
   // Recorder/compiler helpers:
   factsAtGridPoint(x999: number, y999: number): Promise<ElementFacts | null>;
   /** Facts for an [eN] ref from the latest observation (for verified recording). */
@@ -95,14 +97,21 @@ export class PlaywrightWebDriver implements SurfaceDriver {
   }
 
   private wirePage(p: Page): void {
+    // Conservative dialog policy: DISMISS by default. An unexpected
+    // confirmation/transfer/delete dialog must NOT be accepted by
+    // infrastructure. Steps that EXPECT a dialog set acceptNextDialog.
     p.on('dialog', async (d) => {
+      const accepted = this._acceptNextDialog;
+      this._acceptNextDialog = false; // one-shot
       this.eventLog.push({
         kind: 'dialog',
         detail: `${d.type()}: ${d.message()}`.slice(0, 300),
         at: new Date().toISOString(),
+        accepted,
       });
       try {
-        await d.accept();
+        if (accepted) await d.accept();
+        else await d.dismiss();
       } catch {
         /* auto-dismissed races */
       }
@@ -110,6 +119,13 @@ export class PlaywrightWebDriver implements SurfaceDriver {
     p.on('crash', () => {
       this.eventLog.push({ kind: 'crash', detail: 'page crashed', at: new Date().toISOString() });
     });
+  }
+
+  private _acceptNextDialog = false;
+  /** One-shot: the next native dialog will be ACCEPTED instead of dismissed.
+   *  Called by the engine when the artifact's step declares expectsDialog. */
+  acceptNextDialog(): void {
+    this._acceptNextDialog = true;
   }
 
   async close(): Promise<void> {

@@ -212,10 +212,16 @@ export const Step = z.object({
   postCheck: Check.optional(),
   /**
    * Replay-safety semantics. Non-idempotent steps (submits, transfers) are
-   * NEVER re-executed by recovery fast-forward - re-running them could
+   * NEVER re-executed by recovery fast-forward — re-running them could
    * duplicate financial side effects.
    */
   idempotent: z.boolean().default(true),
+  /**
+   * Declares that this step EXPECTS a native dialog (confirm/alert) and the
+   * engine should ACCEPT it. Default: all dialogs are DISMISSED (safe default
+   * — infrastructure never auto-accepts an unexpected irreversible confirm).
+   */
+  expectsDialog: z.boolean().default(false),
   recoverableErrors: z.array(RecoverSpec).max(4).default([]),
   riskClass: z.enum(['safe', 'risky']).default('safe'),
   // extract-only fields:

@@ -1,41 +1,76 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+
 const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-const scenarios = [
-  { id: 'discovery', dir: 'evidence/discovery', capability: 'legacybank.lookup-member-balance', expect: 'LLM run ends DONE; artifact compiled from this run' },
-  { id: 'replay-success', dir: 'evidence/replay-success', capability: 'legacybank.lookup-member-balance', expect: 'SUCCESS + savingsBalance=$2,450.75, zero degraded steps' },
-  { id: 'replay-business-outcome', dir: 'evidence/replay-business-outcome', capability: 'legacybank.lookup-member-balance', expect: 'BUSINESS_OUTCOME / MEMBER_NOT_FOUND' },
-  { id: 'replay-session-recovery', dir: 'evidence/replay-session-recovery', capability: 'legacybank.lookup-member-balance', expect: 'mid-flow expiry → relogin chain → SUCCESS' },
-  { id: 'replay-cross-tenant', dir: 'evidence/replay-cross-tenant', capability: 'legacybank.lookup-member-balance', expect: 'tenant=nw variant → SUCCESS, same balance' },
-  { id: 'risky-gating', dir: 'evidence/risky-gating', capability: 'legacybank.open-sub-account', expect: 'FAILED / RISKY_STEP_BLOCKED at the irreversible confirm' },
-  { id: 'hitl-approval', dir: 'evidence/hitl-approval', capability: 'legacybank.open-sub-account', expect: 'operator approval via console → SUCCESS, resumedByHuman=true, audit samples' },
+const readJsonl = (file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+const scenarioDefinitions = [
+  ['discovery', 'legacybank.lookup-member-balance', 'DONE'],
+  ['replay-success', 'legacybank.lookup-member-balance', 'SUCCESS'],
+  ['replay-business-outcome', 'legacybank.lookup-member-balance', 'BUSINESS_OUTCOME'],
+  ['replay-session-recovery', 'legacybank.lookup-member-balance', 'SUCCESS'],
+  ['replay-cross-tenant', 'legacybank.lookup-member-balance', 'SUCCESS'],
+  ['risky-gating', 'legacybank.open-sub-account', 'FAILED'],
+  ['hitl-approval', 'legacybank.open-sub-account', 'SUCCESS'],
+  ['hitl-manual-takeover', 'legacybank.open-sub-account', 'SUCCESS'],
 ];
-const manifest = { generatedAt: new Date().toISOString(), artifacts: {}, scenarios: [] };
-for (const cap of ['legacybank.lookup-member-balance', 'legacybank.open-sub-account']) {
-  manifest.artifacts[cap] = sha(`capabilities/${cap}.json`);
-}
-function listFiles(dir) {
-  const out = [];
-  for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (f.isDirectory()) out.push(...listFiles(`${dir}/${f.name}`).map((x) => `${f.name}/${x}`));
-    else out.push(f.name);
+
+export function generateManifest(root = process.cwd()) {
+  const manifest = { schemaVersion: 2, generatedAt: new Date().toISOString(), artifacts: {}, scenarios: [] };
+  for (const capabilityId of ['legacybank.lookup-member-balance', 'legacybank.open-sub-account']) {
+    const file = path.join(root, `capabilities/${capabilityId}.json`);
+    if (!fs.existsSync(file)) throw new Error(`missing frozen artifact: ${capabilityId}`);
+    manifest.artifacts[capabilityId] = sha(file);
   }
-  return out;
+  for (const [scenario, capabilityId, expectedResult] of scenarioDefinitions) {
+    const relativeDir = `evidence/${scenario}`; const dir = path.join(root, relativeDir);
+    const logFile = path.join(dir, 'log.jsonl');
+    if (!fs.existsSync(logFile)) throw new Error(`missing frozen scenario log: ${scenario}`);
+    const events = readJsonl(logFile);
+    const terminals = scenario === 'discovery'
+      ? events.filter((event) => event.type === 'run_end')
+      : events.filter((event) => event.type === 'replay_result');
+    if (terminals.length !== 1) throw new Error(`${scenario}: expected exactly one terminal event`);
+    const terminal = terminals[0];
+    const runId = terminal.runId ?? events.find((event) => event.runId)?.runId;
+    if (!runId) throw new Error(`${scenario}: terminal/run log has no runId`);
+    const entry = {
+      scenario, dir: relativeDir, runId, capabilityId, expectedResult,
+      tenant: scenario === 'replay-cross-tenant' ? 'nw' : 'base',
+      files: listFiles(dir),
+    };
+    if (scenario !== 'discovery') {
+      const definition = path.join(dir, 'artifact.executed.json');
+      if (!fs.existsSync(definition)) throw new Error(`${scenario}: exact artifact.executed.json snapshot missing`);
+      entry.artifactDefinition = 'artifact.executed.json';
+      entry.artifactSha256 = sha(definition);
+      entry.artifactVersion = JSON.parse(fs.readFileSync(definition, 'utf8')).metadata.version;
+      entry.ledger = 'ledger.jsonl';
+      if (!fs.existsSync(path.join(dir, entry.ledger))) throw new Error(`${scenario}: curated ledger row missing`);
+      if (entry.artifactSha256 !== terminal.artifactSha256) throw new Error(`${scenario}: snapshot differs from executed artifact hash`);
+    }
+    if (scenario === 'hitl-approval') Object.assign(entry, { interventionLog: 'intervention.jsonl' });
+    if (scenario === 'hitl-manual-takeover') Object.assign(entry, {
+      interventionLog: 'intervention.jsonl', beforeObservation: 'before.json', afterObservation: 'after.json',
+      beforeScreenshot: 'before.png', afterScreenshot: 'after.png',
+    });
+    manifest.scenarios.push(entry);
+  }
+  const manifestFile = path.join(root, 'evidence/manifest.json');
+  fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifest;
 }
-for (const s of scenarios) {
-  const logPath = `${s.dir}/log.jsonl`;
-  if (!fs.existsSync(logPath)) continue;
-  const log = fs.readFileSync(logPath, 'utf8');
-  manifest.scenarios.push({
-    dir: s.dir,
-    scenario: s.id,
-    runId: log.match('"runId":"([^"]+)"')?.[1] ?? null,
-    capabilityId: s.capability,
-    artifactSha256: log.match('"artifactSha256":"([a-f0-9]+)"')?.[1] ?? null,
-    expectedResult: s.expect,
-    actualResult: log.match('"status":"([A-Z_]+)"')?.[1] ?? null,
-    files: listFiles(s.dir),
-  });
+
+function listFiles(dir, root = dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) return listFiles(file, root);
+    return [{ path: path.relative(root, file).split(path.sep).join('/'), sha256: sha(file), bytes: fs.statSync(file).size }];
+  }).sort((a, b) => a.path.localeCompare(b.path));
 }
-fs.writeFileSync('evidence/manifest.json', JSON.stringify(manifest, null, 2));
-console.log('manifest:', manifest.scenarios.length, 'scenarios');
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const manifest = generateManifest(process.cwd());
+  console.log(`manifest: ${manifest.scenarios.length} frozen scenarios`);
+}

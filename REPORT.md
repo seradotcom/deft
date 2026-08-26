@@ -9,9 +9,8 @@ the real problem — two tenants (ACME FCU / NorthWind CU) on the same vendor
 product, server-rendered `<frameset>`, WebForms controls (`ctl00$…`), no test
 IDs, native `confirm()` on the irreversible step, session timeouts, and a
 fault-injection endpoint. The implementation claims below are covered by the
-test suite. Existing `/evidence` bundles predate the frozen `2.0.0` artifacts
-and are intentionally not release evidence; Task 7 regenerates and verifies
-that package from the frozen bytes.
+test suite. The curated `/evidence` package is bound to the frozen `2.0.0`
+artifact bytes and checked by `npm run verify:submission`.
 
 ## 1. Architecture
 
@@ -55,9 +54,9 @@ internal flags to prevent recursion, not to bypass guarantees.
 Zod is the single source of truth: static types, runtime validation, JSON
 Schema contract. Key decisions:
 
-- **Inputs/outputs are JSON Schema (draft 2020-12)**, validated with AJV at
-  invocation and before SUCCESS — any agent can check the contract without our
-  code.
+- **Input/output contracts are JSON-Schema-shaped objects**, validated with AJV
+  at invocation and before SUCCESS — any agent can check the invocation contract
+  without our code. Zod owns the capability artifact schema.
 - **Steps carry human `intent`** alongside machine fields; a reviewer reads the
   flow without decoding descriptors.
 - **Values are templates** (`{{inputs.memberId}}`, `{{env.password}}`).
@@ -95,10 +94,11 @@ locators resolved through the verified chain with fingerprint scoring
 **Recovery**: bounded per-step chains (`maxAttempts ≤ 3`, every attempt in
 evidence). Session expiry mid-flow: the login redirect is detected across all
 frame URLs, the relogin chain re-authenticates, then the engine **fast-forwards
-the deterministic flow** (re-runs verified steps, skipping non-idempotent ones
-— crossing one escalates instead of duplicating a side effect) and retries.
-Historical pre-freeze bundle: `replay-session-recovery/`; Task 7 regenerates
-the release result from the frozen definition.
+the deterministic flow** (re-runs verified steps, skipping non-idempotent ones;
+crossing one stops fail-closed instead of duplicating a side effect) and
+retries; the caller/operator routes such a block explicitly. The submitted
+recovery bundle proves expiry detection, re-authentication, guarded retry, and
+terminal `SUCCESS`. Bounded fast-forward itself is covered by offline tests.
 
 **Fail-closed geometry**: frame resolution is strict (`FRAME_NOT_FOUND`, never
 "act on the parent"); the coordinate fallback is legal only for clicks
@@ -108,17 +108,18 @@ frameset app).
 
 ## 4. Heterogeneity & multi-tenant
 
-**Surface abstraction**: everything above `SurfaceDriver` is surface-agnostic.
-A desktop driver (UIA) would implement the same port — the observation format
-and action IR were designed for that translation.
+**Surface portability**: the capability/action representation is designed with
+cross-surface portability in mind. The implemented replay backend is
+intentionally Playwright/web-specific. A desktop UIA backend needs its own
+target-resolution and action adapter while preserving the capability contract.
 
 **Multi-tenant is demonstrated, not just designed.** The lookup capability was
 recorded on ACME and replayed on **NorthWind** (different branding, labels,
-vendor v2.4) via declarative variant overlays. Patches cover locator names *and*
+vendor v2.4) via declarative variant overlays.
+Patches cover locator names *and*
 recorded fingerprints (identity evidence must match the tenant surface too).
 Vendor-stable `name` attributes in fallback chains provide a second mechanism.
-Historical pre-freeze bundle: `replay-cross-tenant/`; Task 7 regenerates the
-release result from the frozen definition.
+The submitted bundle replays the exact post-variant definition on NorthWind.
 
 ## 5. Escalation & handoff
 
@@ -143,11 +144,11 @@ evidence is regenerated only after executable artifacts are finalized.
   screened against destructive-verb patterns *before execution*; matches are
   blocked and routed to the operator. During replay, `riskClass: risky` steps
   require explicit approval.
-- **Redaction at the sink**: registered secrets replaced before serialization;
-  sensitive keys never persist values; artifact writes pass through the
-  scrubber; login values template into `{{env.*}}` by construction.
-- **Fixture isolation**: the simulator deep-clones its data per instance;
-  scenarios cannot contaminate each other.
+- **Redaction**: registered secrets are scrubbed from transcripts and structured
+  logs; structured logs additionally apply field/pattern redaction. Submitted
+  banking/member data is synthetic.
+- **Fixture isolation**: fixture/business data is deep-cloned per simulator
+  instance; scenarios cannot contaminate each other's fixtures.
 
 Limits: redaction is pattern-based; the console is localhost-only; discovery's
 risk screen is a heuristic (a novel secret format typed into a non-obvious

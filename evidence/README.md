@@ -9,6 +9,11 @@ The executable artifacts are the exact LF-normalized files in `capabilities/`,
 both at version `2.0.0`. Each replay bundle contains the exact bytes executed as
 `artifact.executed.json`; variant replay identity is computed after applying
 the declared overlay.
+The reviewer-facing release copies at the directory root,
+`artifact.legacybank.lookup-member-balance.json` and
+`artifact.legacybank.open-sub-account.json`, are verified byte-for-byte against
+those frozen files. All banking/member data shown in submitted evidence is
+synthetic.
 
 | Bundle | Contract proved |
 |---|---|

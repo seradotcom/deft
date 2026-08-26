@@ -46,30 +46,31 @@ Terminal 1 — the legacy bank simulator (two tenants of the same vendor product
 npm run target:start        # http://localhost:7788/acme/login.aspx  ·  /nw/login.aspx
 ```
 
-Terminal 2 — discover a capability with a real LLM run:
+Terminal 2 — discover a disposable demo capability with a real LLM run. This
+separate ID keeps the frozen `2.0.0` release artifacts untouched:
 
 ```bash
 node dist/cli/index.js discover \
   --tenant acme \
   --goal "Look up member M10041 in member search and read the balance of their Savings account." \
-  --capability-id legacybank.lookup-member-balance \
+  --capability-id legacybank.demo-lookup-member-balance \
   --name "Look up member and read savings balance" \
   --description "Signs into LegacyBank core, searches a member by ID, opens their record, and reads the Savings account balance from the accounts table." \
   --input memberId=M10041 \
   --outcome "MEMBER_NOT_FOUND=pageTextContains:'No matching member records were found'"
 ```
 
-Then replay it — deterministically, no model, no API key:
+Then replay the capability just created — deterministically, no model, no API key:
 
 ```bash
-node dist/cli/index.js replay legacybank.lookup-member-balance --input memberId=M10041
+node dist/cli/index.js replay legacybank.demo-lookup-member-balance --input memberId=M10041
 # → { "status": "SUCCESS", "outputs": { "savingsBalance": "$2,450.75" } }
 
 # Expected business result (not an error):
-node dist/cli/index.js replay legacybank.lookup-member-balance --input memberId=M99999
+node dist/cli/index.js replay legacybank.demo-lookup-member-balance --input memberId=M99999
 # → { "status": "BUSINESS_OUTCOME", "businessOutcome": { "code": "MEMBER_NOT_FOUND" } }
 
-# Same capability, second tenant of the same vendor product (variant overlay):
+# Curated multi-tenant release capability (do not rediscover it):
 node dist/cli/index.js replay legacybank.lookup-member-balance --tenant nw --input memberId=M10041
 ```
 

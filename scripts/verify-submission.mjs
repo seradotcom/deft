@@ -45,11 +45,18 @@ function verifySubmissionUnsafe(root, options) {
   for (const [capabilityId, frozen] of artifactsToVerify) {
     const expectedHash = manifest.artifacts?.[capabilityId];
     let artifactFile;
+    let evidenceArtifactFile;
     try { artifactFile = safeResolve(path.join(root, 'capabilities'), `${capabilityId}.json`); }
     catch { fail(`unsafe capability id ${capabilityId}`); continue; }
+    try { evidenceArtifactFile = safeResolve(path.join(root, 'evidence'), `artifact.${capabilityId}.json`); }
+    catch { fail(`unsafe root evidence artifact id ${capabilityId}`); continue; }
     if (!fs.existsSync(artifactFile)) fail(`missing capability ${capabilityId}`);
     else if (sha(artifactFile) !== expectedHash || (frozen && (expectedHash !== frozen.sha256 || fs.statSync(artifactFile).size !== frozen.bytes))) {
       fail(`frozen artifact bytes/hash mismatch for ${capabilityId}`);
+    }
+    if (!fs.existsSync(evidenceArtifactFile)) fail(`missing root release artifact evidence/${capabilityId}.json`);
+    else if (sha(evidenceArtifactFile) !== sha(artifactFile)) {
+      fail(`root release artifact is not byte-for-byte identical for ${capabilityId}`);
     }
   }
 

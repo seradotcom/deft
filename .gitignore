@@ -23,5 +23,8 @@ Thumbs.db
 .auth/
 artifacts/
 
+# Local development validation ledgers; release evidence is curated in /evidence.
+capabilities/*.validation.jsonl
+
 # Local isolated development worktrees
 .worktrees/

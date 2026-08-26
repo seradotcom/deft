@@ -341,10 +341,24 @@ export function applyVariant(artifact: CapabilityArtifact, tenantId?: string): C
   const clone = JSON.parse(JSON.stringify(artifact)) as Record<string, unknown>;
   const steps = clone.steps as Array<{ id: string }>;
   for (const [flatKey, value] of Object.entries(variant.patches)) {
-    const resolved = flatKey.replace(/^steps\[([^\]]+)\]/, (_m, stepId: string) => {
+    let resolved = flatKey;
+    const bracketMatch = flatKey.match(/^steps\[([^\]]+)\](?:\.(.+))?$/);
+    if (bracketMatch) {
+      const [, stepId, remainder] = bracketMatch;
       const idx = steps.findIndex((s) => s.id === stepId);
-      return `steps.${idx >= 0 ? idx : stepId}`;
-    });
+      if (idx < 0) {
+        throw Object.assign(new Error(`UNKNOWN_VARIANT_STEP: '${stepId}'`), { deftClass: 'ARTIFACT_INVALID' });
+      }
+      resolved = remainder ? `steps.${idx}.${remainder}` : `steps.${idx}`;
+    } else {
+      const indexedMatch = flatKey.match(/^steps\.(\d+)(?:\.(.+))?$/);
+      if (indexedMatch && Number(indexedMatch[1]) >= steps.length) {
+        throw Object.assign(new Error(`UNKNOWN_VARIANT_STEP: '${flatKey}'`), { deftClass: 'ARTIFACT_INVALID' });
+      }
+      if (!indexedMatch && /^steps(?:\.|$)/.test(flatKey)) {
+        throw Object.assign(new Error(`UNKNOWN_VARIANT_STEP: '${flatKey}'`), { deftClass: 'ARTIFACT_INVALID' });
+      }
+    }
     setFlatPath(clone, resolved, value);
   }
   // Patches are code-by-data: revalidate the merged artifact.

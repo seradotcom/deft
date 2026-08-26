@@ -55,6 +55,26 @@ describe('native dialog human-control lease', () => {
 });
 
 describe('operator console dialog lease', () => {
+  it('reuses the existing listener when started repeatedly', async () => {
+    const reservedPort = await reserveEphemeralPort();
+    const console_ = new OperatorConsole(reservedPort, await tempDirectory());
+    await console_.start();
+    consoles.push(console_);
+
+    await console_.start();
+
+    expect(console_.baseUrl).toMatch(/127\.0\.0\.1/);
+  });
+
+  async function reserveEphemeralPort(): Promise<number> {
+    const probe = createServer();
+    await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
+    const address = probe.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+    return port;
+  }
+
   it('rejects resume while a native dialog is pending and cleans the lease on abort', async () => {
     const console_ = new OperatorConsole(0, await tempDirectory());
     await console_.start();

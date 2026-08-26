@@ -5,11 +5,10 @@
     "id": "legacybank.open-sub-account",
     "name": "Open a sub-account for a member",
     "description": "Signs into LegacyBank core, opens the member record, fills the new sub-account form (type, nickname, initial deposit), reviews, and confirms the irreversible opening through the native confirmation dialog.",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "status": "needs-review",
     "createdAt": "2026-08-24T00:21:17.639Z",
-    "updatedAt": "2026-08-24T00:21:17.639Z",
-    "notes": "Operator-authored: descriptors captured live with record-time verified probing (no LLM in the loop)."
+    "updatedAt": "2026-08-25T00:00:00.000Z"
   },
   "target": {
     "appFamily": "legacybank",
@@ -45,7 +44,9 @@
   },
   "outputs": {
     "type": "object",
-    "properties": {}
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
   },
   "environmentBindings": {
     "username": {
@@ -150,6 +151,7 @@
       "id": "l3",
       "intent": "Click Sign In",
       "action": "click",
+      "submission": "SUBMIT",
       "target": {
         "primary": {
           "kind": "role",
@@ -310,6 +312,7 @@
       "id": "s6",
       "intent": "Click Find Member",
       "action": "click",
+      "submission": "SUBMIT",
       "target": {
         "primary": {
           "kind": "role",
@@ -634,6 +637,7 @@
       "id": "s12",
       "intent": "Review the sub-account before submitting",
       "action": "click",
+      "submission": "SUBMIT",
       "target": {
         "primary": {
           "kind": "role",
@@ -695,6 +699,9 @@
       "id": "s13",
       "intent": "Confirm the irreversible account opening (native confirm dialog)",
       "action": "click",
+      "submission": "SUBMIT",
+      "idempotent": false,
+      "expectsDialog": true,
       "target": {
         "primary": {
           "kind": "role",
@@ -755,7 +762,10 @@
     "relogin": [
       {
         "action": "navigate",
-        "urlTemplate": "http://localhost:7788/acme/login.aspx"
+        "urlTemplate": "http://localhost:7788/acme/login.aspx",
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
         "action": "fill",
@@ -792,7 +802,10 @@
           "quality": "verified",
           "rationale": "2 semantic locator(s) verified against the live element at record time"
         },
-        "valueTemplate": "{{env.username}}"
+        "valueTemplate": "{{env.username}}",
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
         "action": "fill",
@@ -829,7 +842,10 @@
           "quality": "verified",
           "rationale": "2 semantic locator(s) verified against the live element at record time"
         },
-        "valueTemplate": "{{env.password}}"
+        "valueTemplate": "{{env.password}}",
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
         "action": "click",
@@ -865,14 +881,23 @@
           },
           "quality": "verified",
           "rationale": "2 semantic locator(s) verified against the live element at record time"
-        }
+        },
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
-        "action": "gotoStepPage"
+        "action": "gotoStepPage",
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
         "action": "wait",
-        "durationMs": 800
+        "durationMs": 800,
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       }
     ]
   },

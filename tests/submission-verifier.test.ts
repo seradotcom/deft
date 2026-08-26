@@ -19,6 +19,7 @@ function fixture(scenario = 'replay-success') {
   const artifact = Buffer.from('{"kind":"Capability","metadata":{"id":"cap.test","version":"2.0.0"}}\n');
   const artifactHash = sha(artifact); const runId = `run-${scenario}`;
   write(path.join(root, 'capabilities/cap.test.json'), artifact);
+  write(path.join(root, 'evidence/artifact.cap.test.json'), artifact);
   write(path.join(root, `evidence/${scenario}/artifact.json`), artifact);
   write(path.join(root, `evidence/${scenario}/log.jsonl`), jsonl(
     { type: 'run_start', runId, kind: 'replay', label: 'cap.test' },

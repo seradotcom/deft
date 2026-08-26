@@ -34,6 +34,7 @@ type PendingIntervention = { request: InterventionRequest; before: Observation; 
 export class OperatorConsole {
   private app!: Express;
   private server!: Server;
+  private startPromise?: Promise<void>;
   private interventions = new Map<string, PendingIntervention>();
   private resolvers = new Map<string, (value: InterventionResult) => void>();
   private takeoverInFlight = new Set<string>();
@@ -53,28 +54,37 @@ export class OperatorConsole {
   }
 
   start(): Promise<void> {
-    this.app = express();
-    this.app.use(express.json());
-    this.app.use('/evidence', express.static(this.evidenceDir));
-    this.app.get('/', (_req, res) => res.type('html').send(HTML_SHELL.replace('<!--CARDS-->', this.listInterventions().map(renderCard).join('\n') || '<p>No active interventions.</p>')));
-    this.app.get('/api/state', (_req, res) => {
-      const states = this.listInterventions().map((i) => i.state);
-      const lease = states.includes('HUMAN_CONTROL') ? 'human' : states.includes('PENDING') ? 'awaiting-operator' : 'idle';
-      res.json({ lease, interventions: this.listInterventions() });
+    this.startPromise ??= new Promise<void>((resolve, reject) => {
+      this.app = express();
+      this.app.use(express.json());
+      this.app.use('/evidence', express.static(this.evidenceDir));
+      this.app.get('/', (_req, res) => res.type('html').send(HTML_SHELL.replace('<!--CARDS-->', this.listInterventions().map(renderCard).join('\n') || '<p>No active interventions.</p>')));
+      this.app.get('/api/state', (_req, res) => {
+        const states = this.listInterventions().map((i) => i.state);
+        const lease = states.includes('HUMAN_CONTROL') ? 'human' : states.includes('PENDING') ? 'awaiting-operator' : 'idle';
+        res.json({ lease, interventions: this.listInterventions() });
+      });
+      this.app.post('/api/interventions/:id/approve', (req, res) => this.approve(req, res));
+      this.app.post('/api/interventions/:id/takeover', (req, res) => this.takeover(req, res));
+      this.app.post('/api/interventions/:id/resume', (req, res) => void this.resume(req, res));
+      this.app.post('/api/interventions/:id/dialog', (req, res) => void this.resolveDialog(req, res));
+      this.app.post('/api/interventions/:id/pointer', (req, res) => void this.pointer(req, res));
+      this.app.post('/api/interventions/:id/abort', (req, res) => this.abort(req, res));
+      this.server = createServer(this.app);
+      this.server.once('listening', resolve);
+      this.server.once('error', reject);
+      this.server.listen(this.port, '127.0.0.1');
     });
-    this.app.post('/api/interventions/:id/approve', (req, res) => this.approve(req, res));
-    this.app.post('/api/interventions/:id/takeover', (req, res) => this.takeover(req, res));
-    this.app.post('/api/interventions/:id/resume', (req, res) => void this.resume(req, res));
-    this.app.post('/api/interventions/:id/dialog', (req, res) => void this.resolveDialog(req, res));
-    this.app.post('/api/interventions/:id/pointer', (req, res) => void this.pointer(req, res));
-    this.app.post('/api/interventions/:id/abort', (req, res) => this.abort(req, res));
-    return new Promise((resolve) => { this.server = createServer(this.app); this.server.listen(this.port, '127.0.0.1', resolve); });
+    return this.startPromise;
   }
   stop(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    if (!this.startPromise) return Promise.resolve();
+    const stopping = new Promise<void>((resolve, reject) => {
       this.server.close((error) => error ? reject(error) : resolve());
       this.server.closeAllConnections();
     });
+    this.startPromise = undefined;
+    return stopping;
   }
 
   async requestAndWait(input: {

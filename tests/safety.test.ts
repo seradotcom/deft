@@ -250,6 +250,18 @@ describe('release-candidate contract preflight', () => {
     expect(hashCapabilityArtifact(base)).toBe(hashCapabilityArtifact(base));
   });
 
+  it('rejects tenant patches that reference an unknown step', () => {
+    const base = CapabilityArtifactSchema.parse(JSON.parse(fs.readFileSync(path.join('capabilities', 'legacybank.lookup-member-balance.json'), 'utf8')));
+    const malformed = JSON.parse(JSON.stringify(base)) as typeof base;
+    const variant = malformed.target.variants?.find((candidate) => candidate.match.tenantId === 'nw');
+    if (!variant) throw new Error('lookup artifact has no NW variant');
+    variant.patches = { ...variant.patches, 'steps.DOES_NOT_EXIST.target.primary.name': 'unexpected' };
+
+    expect(() => applyVariant(malformed, 'nw')).toThrowError(
+      expect.objectContaining({ deftClass: 'ARTIFACT_INVALID', message: expect.stringContaining('UNKNOWN_VARIANT_STEP') }),
+    );
+  });
+
   it('rejects a resolved entry URL outside the pure preflight policy', () => {
     const base = JSON.parse(fs.readFileSync(path.join('capabilities', 'legacybank.lookup-member-balance.json'), 'utf8')) as Record<string, unknown>;
     const artifact = { ...base, target: { ...(base.target as Record<string, unknown>), entryUrlTemplate: 'http://evil.example/login.aspx' } };

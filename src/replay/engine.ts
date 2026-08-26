@@ -9,7 +9,6 @@
  * Degradation (coordinate fallback) is explicit in the result.
  */
 import {
-  CapabilityArtifactSchema,
   type CapabilityArtifact,
   type ReplayResult,
   type Step,
@@ -28,28 +27,35 @@ function gridToPxViewport(x999: number, y999: number): { x: number; y: number } 
     y: Math.max(0, Math.min(899, Math.round((y999 / 999) * 899))),
   };
 }
-import { openRunContext, runCheck, extractStepOutput, applyVariant, validateInputs, validateOutputs, resolveEnvironmentBindings, templateCtx, globMatch, errorClassOf, classifyPhase, shortMsg, describeCheck, describeExtract, matchBusinessOutcome, type Ctx, type ReplayOptions } from './support.js';
+import { openRunContext, runCheck, extractStepOutput, validateOutputs, artifactPreflight, templateCtx, globMatch, errorClassOf, classifyPhase, shortMsg, describeCheck, describeExtract, matchBusinessOutcome, type Ctx, type ReplayOptions } from './support.js';
+
+function writeEvidence(ctx: Ctx, event: Record<string, unknown>): void {
+  try {
+    ctx.evidence.write(event);
+  } catch (error) {
+    throw Object.assign(new Error(`evidence write failed: ${error instanceof Error ? error.message : String(error)}`), {
+      deftClass: 'EVIDENCE_WRITE_FAILED',
+    });
+  }
+}
 
 export async function replayCapability(
   artifactLike: unknown,
   opts: ReplayOptions & { allowRisky?: boolean }
 ): Promise<ReplayResult> {
   const startedAt = new Date().toISOString();
-  const parsed = CapabilityArtifactSchema.safeParse(artifactLike);
-  if (!parsed.success) {
-    throw new Error(`invalid capability artifact: ${parsed.error.message.slice(0, 300)}`);
-  }
-  const artifact = applyVariant(parsed.data, opts.tenantId);
-  validateInputs(artifact, opts.inputs);
+  const { artifact, env, artifactSha256: executedArtifactSha256, artifactDefinitionBytes } = artifactPreflight(artifactLike, opts);
 
   // Environment bindings resolve INSIDE the engine from the runtime env ï¿½
   // secrets are engine-scope values, never model context.
-  opts.env = {
-    ...resolveEnvironmentBindings(artifact, opts.runtimeEnv ?? process.env),
-    ...(opts.env ?? {}),
-  };
+  opts.env = env;
 
   const ctx = await openRunContext(artifact, opts);
+  const artifactDefinitionRef = 'artifact.executed.json';
+  const fsSnapshot = await import('node:fs');
+  const pathSnapshot = await import('node:path');
+  fsSnapshot.writeFileSync(pathSnapshot.join(ctx.evidence.dir, artifactDefinitionRef), Buffer.from(artifactDefinitionBytes));
+  ctx.evidence.write({ type: 'artifact_definition', artifactSha256: executedArtifactSha256, definitionRef: artifactDefinitionRef });
   let status: ReplayResult['status'] = 'SUCCESS';
   let businessOutcome: ReplayResult['businessOutcome'];
   let failure: ReplayResult['failure'];
@@ -119,35 +125,6 @@ export async function replayCapability(
       }
     }
 
-    // Validation ledger: the artifact is IMMUTABLE â€” runtime history lives in
-    // an append-only sidecar, cryptographically tied to the exact bytes.
-    // Approval state is DERIVED from the ledger, never written into the
-    // definition (no byte drift between runs of the same capability).
-    try {
-      const cryptoMod = await import('node:crypto');
-      const fsMod = await import('node:fs');
-      const storePath = process.env.DEFT_CAPABILITIES_DIR ?? 'capabilities';
-      const file = `${storePath}/${artifact.metadata.id}.json`;
-      if (fsMod.existsSync(file)) {
-        const artifactSha256 = cryptoMod.createHash('sha256').update(fsMod.readFileSync(file)).digest('hex');
-        const ledgerPath = `${storePath}/${artifact.metadata.id}.validation.jsonl`;
-        fsMod.appendFileSync(
-          ledgerPath,
-          JSON.stringify({
-            at: new Date().toISOString(),
-            runId: ctx.evidence.runId,
-            tenant: opts.tenantId ?? 'base',
-            status,
-            degradedSteps: ctx.degradedSteps,
-            escalated: ctx.escalation?.resumedByHuman ?? false,
-            artifactSha256,
-          }) + '\n'
-        );
-        ctx.evidence.write({ type: 'ledger_appended', status, artifactSha256, degradedSteps: ctx.degradedSteps.length });
-      }
-    } catch {
-      /* ledger append is best-effort */
-    }
   } finally {
     await ctx.driver.close().catch(() => undefined);
   }
@@ -169,62 +146,51 @@ export async function replayCapability(
       };
     }
   }
-
-  // Output contract: SUCCESS only if the extracted values satisfy the
-  // artifact's declared output schema.
-  if (status === 'SUCCESS') {
-    try {
-      validateOutputs(artifact, ctx.outputs);
-    } catch (err) {
-      status = 'FAILED';
-      failure = {
-        stepId: 'outputs',
-        phase: 'verify',
-        errorClass: 'OUTPUT_CONTRACT_VIOLATION',
-        expected: 'outputs matching artifact.outputs schema',
-        observed: (err as Error).message,
-        evidenceRefs: [],
-      };
-    }
+  let ledgerAppended = false;
+  try {
+    const fsMod = await import('node:fs');
+    const pathMod = await import('node:path');
+    const storePath = opts.capabilitiesDir ?? 'capabilities';
+    fsMod.mkdirSync(storePath, { recursive: true });
+    const ledgerPath = pathMod.join(storePath, `${artifact.metadata.id}.validation.jsonl`);
+    fsMod.appendFileSync(
+      ledgerPath,
+      JSON.stringify({
+        at: new Date().toISOString(),
+        runId: ctx.evidence.runId,
+        tenant: opts.tenantId ?? 'base',
+        status,
+        degradedSteps: ctx.degradedSteps,
+        escalated: ctx.escalation?.resumedByHuman ?? false,
+        artifactSha256: executedArtifactSha256,
+        artifactDefinitionRef,
+      }) + '\n'
+    );
+    ledgerAppended = true;
+  } catch (err) {
+    status = 'FAILED';
+    failure = {
+      stepId: 'ledger',
+      phase: 'verify',
+      errorClass: 'LEDGER_WRITE_FAILED',
+      expected: 'one validation ledger row',
+      observed: err instanceof Error ? err.message : String(err),
+      evidenceRefs: [],
+    };
   }
-    // Validation ledger: the artifact is IMMUTABLE — runtime history lives in
-    // an append-only sidecar, cryptographically tied to the exact bytes.
-    // Approval state is DERIVED from the ledger, never written into the
-    // definition (no byte drift between runs of the same capability).
-    try {
-      const cryptoMod = await import('node:crypto');
-      const fsMod = await import('node:fs');
-      const storePath = process.env.DEFT_CAPABILITIES_DIR ?? 'capabilities';
-      const file = `${storePath}/${artifact.metadata.id}.json`;
-      if (fsMod.existsSync(file)) {
-        const artifactSha256 = cryptoMod.createHash('sha256').update(fsMod.readFileSync(file)).digest('hex');
-        const ledgerPath = `${storePath}/${artifact.metadata.id}.validation.jsonl`;
-        fsMod.appendFileSync(
-          ledgerPath,
-          JSON.stringify({
-            at: new Date().toISOString(),
-            runId: ctx.evidence.runId,
-            tenant: opts.tenantId ?? 'base',
-            status,
-            degradedSteps: ctx.degradedSteps,
-            escalated: ctx.escalation?.resumedByHuman ?? false,
-            artifactSha256,
-          }) + '\n'
-        );
-        ctx.evidence.write({ type: 'ledger_appended', status, artifactSha256, degradedSteps: ctx.degradedSteps.length });
-      }
-    } catch {
-      /* ledger append is best-effort */
-    }
+  writeEvidence(ctx, ledgerAppended
+    ? { type: 'ledger_appended', status, artifactSha256: executedArtifactSha256, degradedSteps: ctx.degradedSteps.length }
+    : { type: 'ledger_append_failed', status: 'FAILED', errorClass: 'LEDGER_WRITE_FAILED' });
 
   const result: ReplayResult = {
     runId: ctx.evidence.runId,
     capabilityId: artifact.metadata.id,
     capabilityVersion: artifact.metadata.version,
-    artifactSha256: opts.artifactSha256,
+    artifactSha256: executedArtifactSha256,
+    artifactDefinitionRef,
     status,
     outputs: status === 'SUCCESS' ? ctx.outputs : undefined,
-    businessOutcome,
+    businessOutcome: status === 'BUSINESS_OUTCOME' ? businessOutcome : undefined,
     failure,
     escalation: ctx.escalation
       ? { ...ctx.escalation, resumedByHuman: status !== 'FAILED' }
@@ -234,7 +200,7 @@ export async function replayCapability(
     startedAt,
     finishedAt: new Date().toISOString(),
   };
-  ctx.evidence.write({ type: 'replay_result', ...result });
+  writeEvidence(ctx, { type: 'replay_result', ...result });
   return result;
 }
 

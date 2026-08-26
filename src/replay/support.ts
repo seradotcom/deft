@@ -1,4 +1,5 @@
 import AjvDefault from 'ajv/dist/ajv.js';
+import { createHash } from 'node:crypto';
 type AjvError = { instancePath: string; message?: string };
 type AjvValidator = { compile: (s: object) => ((data: unknown) => boolean) & { errors?: AjvError[] } };
 /**
@@ -23,7 +24,7 @@ import { EvidenceLogger } from '../evidence/logger.js';
 export interface ReplayOptions {
   tenantId?: string;
   /** sha256 of the artifact bytes loaded by the caller — flows into the result. */
-  artifactSha256?: string;
+  artifactBytes?: Uint8Array | string;
   /** Raw runtime env — artifact environmentBindings resolve against it INSIDE
    *  the engine. Pre-resolved `env` (if given) takes precedence per key. */
   runtimeEnv?: Record<string, string | undefined>;
@@ -32,6 +33,7 @@ export interface ReplayOptions {
   headless?: boolean;
   allowRisky?: boolean;
   runsDir?: string;
+  capabilitiesDir?: string;
   /**
    * Human-in-the-loop: called when a step can't be completed safely or a risky
    * step needs approval. Receives the REAL current observation (screenshot +
@@ -105,6 +107,178 @@ export function templateCtx(
   };
 }
 
+/** Resolve all artifact templates before a browser context exists. */
+export function validateArtifactTemplates(
+  artifact: CapabilityArtifact,
+  opts: ReplayOptions,
+  env: Record<string, string>
+): string {
+  const outputSchema = artifact.outputs as Record<string, unknown>;
+  const outputProperties =
+    outputSchema.type === 'object' && outputSchema.properties && typeof outputSchema.properties === 'object'
+      ? (outputSchema.properties as Record<string, unknown>)
+      : {};
+  const outputs = Object.fromEntries(Object.keys(outputProperties).map((key) => [key, '__deft_output__']));
+  const ctx: Record<string, unknown> = {
+    inputs: opts.inputs,
+    env,
+    target: { entryUrl: '' },
+    outputs,
+  };
+  if (/\{\{\s*target\.entryUrl\s*\}\}/.test(artifact.target.entryUrlTemplate)) {
+    throw Object.assign(new Error('target.entryUrlTemplate cannot reference target.entryUrl'), { deftClass: 'ARTIFACT_INVALID' });
+  }
+  const resolvedEntryUrl = interpolate(artifact.target.entryUrlTemplate, ctx);
+  ctx.target = { entryUrl: resolvedEntryUrl };
+
+  const declaredOutputs = new Set(Object.keys(outputProperties));
+  const outputReferencePattern = /\{\{\s*outputs\.([A-Za-z0-9_.-]+)\s*\}\}/g;
+  const assertOutputReferences = (value: unknown, available: Set<string>, ancestors = new Set<object>()): void => {
+    if (typeof value === 'string') {
+      outputReferencePattern.lastIndex = 0;
+      for (const match of value.matchAll(outputReferencePattern)) {
+        const name = match[1]!;
+        if (!available.has(name)) {
+          throw Object.assign(new Error(`output reference is not available yet: ${name}`), { deftClass: 'ARTIFACT_INVALID' });
+        }
+      }
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    if (ancestors.has(value)) return;
+    const next = new Set(ancestors);
+    next.add(value);
+    for (const child of Object.values(value as Record<string, unknown>)) assertOutputReferences(child, available, next);
+  };
+  const availableOutputs = new Set<string>();
+  for (const step of artifact.authPhase?.steps ?? []) {
+    assertOutputReferences(step, availableOutputs);
+    if (step.action === 'extract' && step.outputKey) availableOutputs.add(step.outputKey);
+  }
+  for (const step of artifact.steps) {
+    assertOutputReferences(step, availableOutputs);
+    if (step.action === 'extract' && step.outputKey) availableOutputs.add(step.outputKey);
+  }
+  for (const chain of Object.values(artifact.recoveryChains ?? {})) assertOutputReferences(chain, new Set());
+  // Final checks and declared business outcomes may refer to any declared output;
+  // the generic interpolation pass below still rejects absent names.
+  assertOutputReferences(artifact.successCondition, declaredOutputs);
+  assertOutputReferences(artifact.businessOutcomes, declaredOutputs);
+
+  const visit = (value: unknown, ancestors = new Set<object>()): void => {
+    if (typeof value === 'string') {
+      if (value.includes('{{') || value.includes('}}')) interpolate(value, ctx);
+      return;
+    }
+    if (Array.isArray(value)) {
+      if (ancestors.has(value)) {
+        throw Object.assign(new Error('cyclic artifact structure during template preflight'), { deftClass: 'ARTIFACT_INVALID' });
+      }
+      const nextAncestors = new Set(ancestors);
+      nextAncestors.add(value);
+      for (const item of value) visit(item, nextAncestors);
+      return;
+    }
+    if (value && typeof value === 'object') {
+      if (ancestors.has(value)) {
+        throw Object.assign(new Error('cyclic artifact structure during template preflight'), { deftClass: 'ARTIFACT_INVALID' });
+      }
+      const nextAncestors = new Set(ancestors);
+      nextAncestors.add(value);
+      for (const child of Object.values(value)) visit(child, nextAncestors);
+    }
+  };
+
+  visit(artifact);
+  return resolvedEntryUrl;
+}
+
+export function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+}
+
+export function hashCapabilityArtifact(artifact: CapabilityArtifact): string {
+  return createHash('sha256').update(canonicalJson(artifact), 'utf8').digest('hex');
+}
+
+function canonicalArtifactBytes(artifact: CapabilityArtifact): Uint8Array {
+  return Buffer.from(canonicalJson(artifact), 'utf8');
+}
+
+function invalidArtifact(message: string): Error {
+  return Object.assign(new Error(message), { deftClass: 'ARTIFACT_INVALID' });
+}
+
+function suppliedArtifactBytes(value: Uint8Array | string): Uint8Array {
+  return typeof value === 'string' ? Buffer.from(value, 'utf8') : Buffer.from(value);
+}
+
+export interface ArtifactPreflightResult {
+  artifact: CapabilityArtifact;
+  env: Record<string, string>;
+  artifactSha256: string;
+  artifactDefinitionBytes: Uint8Array;
+}
+
+/** Single pre-browser artifact/runtime contract gate, including tenant patches. */
+export function artifactPreflight(
+  artifactLike: unknown,
+  opts: ReplayOptions
+): ArtifactPreflightResult {
+  const parsed = CapabilityArtifactSchema.safeParse(artifactLike);
+  if (!parsed.success) {
+    throw invalidArtifact(`invalid capability artifact: ${parsed.error.message.slice(0, 300)}`);
+  }
+  const sourceBytes = opts.artifactBytes === undefined ? undefined : suppliedArtifactBytes(opts.artifactBytes);
+  if (sourceBytes) {
+    let sourceJson: unknown;
+    try {
+      sourceJson = JSON.parse(Buffer.from(sourceBytes).toString('utf8'));
+    } catch {
+      throw invalidArtifact('artifactBytes must contain valid JSON');
+    }
+    const sourceParsed = CapabilityArtifactSchema.safeParse(sourceJson);
+    if (!sourceParsed.success || canonicalJson(sourceParsed.data) !== canonicalJson(parsed.data)) {
+      throw invalidArtifact('artifactBytes do not correspond to artifactLike');
+    }
+  }
+  let artifact: CapabilityArtifact;
+  try {
+    artifact = applyVariant(parsed.data, opts.tenantId);
+  } catch (error) {
+    if (error && typeof error === 'object' && 'deftClass' in error) throw error;
+    throw Object.assign(new Error(`invalid tenant artifact: ${(error as Error).message}`), {
+      deftClass: 'ARTIFACT_INVALID',
+    });
+  }
+  try {
+    ajv.compile(artifact.inputs as object);
+    ajv.compile(artifact.outputs as object);
+  } catch (error) {
+    throw invalidArtifact(`invalid input/output contract schema: ${(error as Error).message}`);
+  }
+  validateInputs(artifact, opts.inputs);
+  const env = {
+    ...resolveEnvironmentBindings(artifact, opts.runtimeEnv ?? process.env),
+    ...(opts.env ?? {}),
+  };
+  const entryUrl = validateArtifactTemplates(artifact, opts, env);
+  const policy = defaultPolicy(env.baseUrl ?? 'http://localhost:7788');
+  if (!policy.isUrlAllowed(entryUrl)) {
+    throw Object.assign(new Error(`entry URL outside policy: ${entryUrl}`), { deftClass: 'ARTIFACT_INVALID' });
+  }
+  const definitionBytes = opts.tenantId || !sourceBytes ? canonicalArtifactBytes(artifact) : sourceBytes;
+  return {
+    artifact,
+    env,
+    artifactSha256: createHash('sha256').update(definitionBytes).digest('hex'),
+    artifactDefinitionBytes: definitionBytes,
+  };
+}
+
 /** Tenant overlay: flat-key JSON patches applied to a deep clone.
  *  Bracket keys reference steps by ID ("steps[s10].target.primary.name"),
  *  not by array index — ids are stable, positions are not. */
@@ -161,7 +335,7 @@ export function validateInputs(artifact: CapabilityArtifact, inputs: Record<stri
     const msg = (validate.errors ?? [])
       .map((e: AjvError) => `${e.instancePath || '(root)'} ${e.message ?? ''}`)
       .join('; ');
-    throw new Error(`input contract violation: ${msg}`);
+    throw Object.assign(new Error(`input contract violation: ${msg}`), { deftClass: 'INPUT_CONTRACT_VIOLATION' });
   }
 }
 
@@ -195,12 +369,14 @@ export function resolveEnvironmentBindings(
     if (binding.source === 'literal') out[key] = binding.value;
     else if (binding.source === 'envVar') {
       const v = runtimeEnv[binding.name];
-      if (v === undefined) throw new Error(`missing environment binding: ${key} (env var ${binding.name})`);
+      if (v === undefined) {
+        throw Object.assign(new Error(`missing environment binding: ${key} (env var ${binding.name})`), {
+          deftClass: 'ARTIFACT_INVALID',
+        });
+      }
       out[key] = v;
     } else {
-      // configKey: declared for deployment wiring, unsupported at runtime —
-      // fail loudly rather than silently.
-      throw new Error(`unsupported binding source for ${key}`);
+      throw Object.assign(new Error(`unsupported binding source for ${key}`), { deftClass: 'ARTIFACT_INVALID' });
     }
   }
   return out;
@@ -354,6 +530,8 @@ export function globMatch(glob: string, url: string): boolean {
 }
 
 export function errorClassOf(err: unknown): string {
+  const deftClass = (err as { deftClass?: unknown } | null)?.deftClass;
+  if (typeof deftClass === 'string') return deftClass;
   const msg = err instanceof Error ? err.message : String(err);
   if (/Timeout.*exceeded/i.test(msg)) return 'TIMEOUT';
   if (/strict mode violation/i.test(msg)) return 'AMBIGUOUS_TARGET';

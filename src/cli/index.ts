@@ -177,8 +177,6 @@ program
     const file = path.join(cfg.capabilitiesDir, `${id}.json`);
     if (!fs.existsSync(file)) throw new Error(`capability not found: ${file}`);
     const artifactBytes = fs.readFileSync(file);
-    const { createHash } = await import('node:crypto');
-    const artifactSha256 = createHash('sha256').update(artifactBytes).digest('hex');
     const artifact = CapabilityArtifactSchema.parse(JSON.parse(artifactBytes.toString('utf8')));
 
     const tenantBase = cmd.tenant ? cfg.baseUrlByTenant[cmd.tenant] : undefined;
@@ -189,7 +187,7 @@ program
     let consoleUp = false;
 
     const result = await replayCapability(artifact, {
-      artifactSha256,
+      artifactBytes,
       tenantId: cmd.tenant,
       runtimeEnv: process.env,
       env: { baseUrl: tenantBase ?? cfg.baseUrlByTenant.acme! },
@@ -197,6 +195,7 @@ program
       headless: !cmd.headed,
       allowRisky: Boolean(cmd.allowRisky),
       runsDir: cfg.runsDir,
+      capabilitiesDir: cfg.capabilitiesDir,
       onEscalation: cmd.escalate
         ? async (info) => {
             await ensure(console_, cfg, () => { consoleUp = true; });

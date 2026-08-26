@@ -376,11 +376,40 @@ function shortErr(err: unknown): string {
 // Templates
 // ---------------------------------------------------------------------------
 
-/** Resolve {{path.to.value}} templates from a nested context. Unknown refs stay literal. */
+/** Resolve templates recursively, rejecting cycles and malformed residual markers. */
 export function interpolate(template: string, ctx: unknown): string {
-  return template.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_m, path: string) => {
-    const val = lookup(ctx, path);
-    return val === undefined ? `{{${path}}}` : String(val);
+  let current = template;
+  const seen = new Set<string>();
+  for (let depth = 0; depth < 8; depth += 1) {
+    if (seen.has(current)) {
+      throw Object.assign(new Error(`cyclic template expansion: ${current}`), { deftClass: 'ARTIFACT_INVALID' });
+    }
+    seen.add(current);
+    if (current.includes('{{') || current.includes('}}')) {
+      const token = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g;
+      let found = false;
+      current = current.replace(token, (_m, path: string) => {
+        found = true;
+        const val = lookup(ctx, path);
+        if (val === undefined) {
+          throw Object.assign(new Error(`unresolved template reference: {{${path}}}`), {
+            deftClass: 'ARTIFACT_INVALID',
+          });
+        }
+        return String(val);
+      });
+      if (current.includes('{{') || current.includes('}}')) {
+        if (!found) {
+          throw Object.assign(new Error(`malformed template marker: ${current}`), { deftClass: 'ARTIFACT_INVALID' });
+        }
+        continue;
+      }
+      if (found) continue;
+    }
+    return current;
+  }
+  throw Object.assign(new Error(`template expansion exceeded depth limit: ${template}`), {
+    deftClass: 'ARTIFACT_INVALID',
   });
 }
 

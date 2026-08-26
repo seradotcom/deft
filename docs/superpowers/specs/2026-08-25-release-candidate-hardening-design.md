@@ -35,7 +35,17 @@ Before creating any browser side effect, replay validates the complete artifact 
 - artifact version and bytes identify the executable definition;
 - entry URL is allowed.
 
+When the caller provides `artifactBytes`, preflight verifies that their JSON
+describes the supplied artifact. A base run hashes those exact raw bytes; a
+tenant run hashes canonical deterministic bytes of the post-variant
+definition. In-memory runs use the same canonical representation. Input
+contract failures are a separate typed `INPUT_CONTRACT_VIOLATION` boundary;
+malformed artifacts, bindings, templates, and byte mismatches remain
+`ARTIFACT_INVALID` before browser creation.
+
 Preflight failures return `ARTIFACT_INVALID` and never navigate, fill, click, press, select, extract, or invoke recovery.
+
+`ARTIFACT_INVALID` is a typed exception raised before a run/browser context exists; it therefore does not manufacture a `ReplayResult` or ledger row. By contrast, an output contract violation occurs after execution and is represented by one terminal `ReplayResult` with status `FAILED` and one matching ledger row.
 
 ### One guarded executor
 
@@ -68,10 +78,17 @@ Each replay has one terminal finalization path:
 1. execute all eligible steps;
 2. extract and validate outputs;
 3. determine the final status;
-4. emit one terminal `replay_result` event;
-5. append exactly one ledger row for the `runId`.
+4. append exactly one ledger row for the `runId`;
+5. emit one terminal `replay_result` event.
 
 No provisional success is written. An invalid output produces only `FAILED`. Curated ledgers reject duplicate run IDs.
+
+A physical ledger write failure is the sole exception to the one-row invariant:
+the run returns `FAILED / LEDGER_WRITE_FAILED`, emits `ledger_append_failed`,
+and emits no `ledger_appended` claim. If evidence storage fails after a ledger
+row was written, replay throws the typed `EVIDENCE_WRITE_FAILED` exception and
+does not return a misleading terminal result; release verification rejects the
+row because its run has no terminal `replay_result` event.
 
 ## Human-in-the-loop architecture
 

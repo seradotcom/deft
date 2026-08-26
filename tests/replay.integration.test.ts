@@ -18,13 +18,20 @@ import { CapabilityArtifactSchema } from '../src/core/artifact.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 
 let server: Server;
 let baseUrl = '';
-const browser: Browser = await chromium.launch({ headless: true });
+const browser: Browser = await chromium.launch({
+  headless: true,
+  env: {
+    ...process.env,
+    CHROME_LOG_FILE: process.platform === 'win32' ? 'NUL' : '/dev/null',
+  },
+});
 
-const CAPABILITIES_DIR = path.join('.tmp-test-capabilities');
-const RUNS_DIR = path.join('.tmp-test-runs');
+const CAPABILITIES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'deft-capabilities-'));
+const RUNS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'deft-runs-'));
 
 beforeAll(async () => {
   const app = createLegacyBankApp() as express.Express;
@@ -72,26 +79,35 @@ function loadArtifactBytes(): { bytes: Buffer; sha256: string; artifact: unknown
 const ENV = (extra: Record<string, string> = {}): {
   env: Record<string, string>;
   runtimeEnv: Record<string, string | undefined>;
+  capabilitiesDir: string;
 } => ({
   env: { baseUrl, ...extra },
   // Bindings resolve INSIDE the engine from the runtime env � same contract
   // the CLI uses. The simulator credential is a documented test fixture.
   runtimeEnv: { LEGACYBANK_USER: 'teller1', LEGACYBANK_PASSWORD: 'Demo!2345' },
+  capabilitiesDir: path.join(RUNS_DIR, 'ledger'),
 });
 
 describe('deterministic replay (integration)', () => {
   it('happy path: SUCCESS with typed outputs, sha256 recorded, zero degraded steps', async () => {
-    const { sha256, artifact } = loadArtifactBytes();
+    const { bytes, sha256, artifact } = loadArtifactBytes();
     const result = await replayCapability(artifact, {
       ...ENV(),
       inputs: { memberId: 'M10041' },
       headless: true,
       runsDir: RUNS_DIR,
-      artifactSha256: sha256,
+      artifactBytes: bytes,
     });
     expect(result.status).toBe('SUCCESS');
     expect(result.outputs?.savingsBalance).toBe('$2,450.75');
     expect(result.artifactSha256).toBe(sha256);
+    const snapshotPath = path.join(RUNS_DIR, result.runId, result.artifactDefinitionRef!);
+    const snapshotBytes = fs.readFileSync(snapshotPath);
+    expect(crypto.createHash('sha256').update(snapshotBytes).digest('hex')).toBe(result.artifactSha256);
+    const ledgerRows = fs.readFileSync(path.join(RUNS_DIR, 'ledger', 'legacybank.lookup-member-balance.validation.jsonl'), 'utf8')
+      .trim().split('\n').map((line) => JSON.parse(line) as { runId?: string; artifactSha256?: string })
+      .filter((row) => row.runId === result.runId);
+    expect(ledgerRows[0]?.artifactSha256).toBe(result.artifactSha256);
     expect(result.degradedSteps).toEqual([]);
     // Strong checkpoint actually ran: both final checks passed.
     const checks = (await import('node:fs')).readdirSync(path.join(RUNS_DIR, result.runId));
@@ -109,6 +125,102 @@ describe('deterministic replay (integration)', () => {
     expect(result.status).toBe('BUSINESS_OUTCOME');
     expect(result.businessOutcome?.code).toBe('MEMBER_NOT_FOUND');
     expect(result.failure).toBeUndefined();
+  });
+
+  it('fails before navigation when the entry URL contains an unresolved template', async () => {
+    const { artifact } = loadArtifactBytes();
+    const unresolved = JSON.parse(JSON.stringify(artifact)) as Record<string, unknown>;
+    (unresolved.target as Record<string, unknown>).entryUrlTemplate = '{{inputs.missingUrl}}';
+
+    await expect(
+      replayCapability(unresolved, {
+        ...ENV(),
+        inputs: { memberId: 'M10041' },
+        headless: true,
+        runsDir: path.join(RUNS_DIR, 'unresolved-template'),
+      })
+    ).rejects.toMatchObject({ deftClass: 'ARTIFACT_INVALID' });
+    expect(fs.existsSync(path.join(RUNS_DIR, 'unresolved-template'))).toBe(false);
+  });
+
+  it('rejects target.entryUrl self-reference before creating a run directory', async () => {
+    const { artifact } = loadArtifactBytes();
+    const selfReferential = JSON.parse(JSON.stringify(artifact)) as Record<string, unknown>;
+    (selfReferential.target as Record<string, unknown>).entryUrlTemplate = '{{ target.entryUrl }}';
+    const runsDir = path.join(RUNS_DIR, 'self-referential-target');
+
+    await expect(
+      replayCapability(selfReferential, {
+        ...ENV(),
+        inputs: { memberId: 'M10041' },
+        headless: true,
+        runsDir,
+      })
+    ).rejects.toMatchObject({ deftClass: 'ARTIFACT_INVALID' });
+    expect(fs.existsSync(runsDir)).toBe(false);
+  });
+
+  it('returns one final FAILED result when a declared output is missing', async () => {
+    const { artifact } = loadArtifactBytes();
+    const missingOutput = JSON.parse(JSON.stringify(artifact)) as Record<string, unknown>;
+    missingOutput.steps = (missingOutput.steps as Array<Record<string, unknown>>).filter(
+      (step) => step.action !== 'extract'
+    );
+    missingOutput.outputs = {
+      type: 'object',
+      properties: { savingsBalance: { type: 'string' } },
+      required: ['savingsBalance'],
+      additionalProperties: false,
+    };
+
+    const ledgerDir = path.join(RUNS_DIR, 'ledger-only');
+    let result;
+    try {
+      result = await replayCapability(missingOutput, {
+        ...ENV(),
+        inputs: { memberId: 'M10041' },
+        headless: true,
+        runsDir: RUNS_DIR,
+        capabilitiesDir: ledgerDir,
+      });
+    } finally { /* replay owns browser cleanup */ }
+
+    expect(result.status).toBe('FAILED');
+    expect(result.failure?.errorClass).toBe('OUTPUT_CONTRACT_VIOLATION');
+    expect(result.outputs).toBeUndefined();
+    const runLog = fs.readFileSync(path.join(RUNS_DIR, result.runId, 'log.jsonl'), 'utf8');
+    expect((runLog.match(/"type":"replay_result"/g) ?? []).length).toBe(1);
+    const ledgerPath = path.join(ledgerDir, 'legacybank.lookup-member-balance.validation.jsonl');
+    const rows = fs.readFileSync(ledgerPath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { runId?: string; status?: string; artifactSha256?: string })
+      .filter((row) => row.runId === result.runId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe('FAILED');
+    expect(rows[0]?.artifactSha256).toBe(result.artifactSha256);
+  });
+
+  it('fails finalization when the validation ledger cannot be written', async () => {
+    const { artifact } = loadArtifactBytes();
+    const ledgerPath = path.join(RUNS_DIR, 'ledger-is-file');
+    fs.writeFileSync(ledgerPath, 'not a directory');
+
+    const result = await replayCapability(artifact, {
+      ...ENV(),
+      inputs: { memberId: 'M99999' },
+      headless: true,
+      runsDir: RUNS_DIR,
+      capabilitiesDir: ledgerPath,
+    });
+
+    expect(result.status).toBe('FAILED');
+    expect(result.failure?.errorClass).toBe('LEDGER_WRITE_FAILED');
+    expect(result.businessOutcome).toBeUndefined();
+    const log = fs.readFileSync(path.join(RUNS_DIR, result.runId, 'log.jsonl'), 'utf8');
+    expect((log.match(/"type":"ledger_appended"/g) ?? []).length).toBe(0);
+    expect((log.match(/"type":"ledger_append_failed"/g) ?? []).length).toBe(1);
+    expect((log.match(/"type":"replay_result"/g) ?? []).length).toBe(1);
   });
 
   it('policy: an interactive action on a frame outside the allowlist is blocked BEFORE touching it', async () => {
@@ -151,10 +263,10 @@ describe('deterministic replay (integration)', () => {
         appFamily: 'test',
         surfaceType: 'web-modern',
         entryUrlTemplate: `${trustedBase}/shell`,
-        variants: [],
+        variants: [{ id: 'nw-frame', match: { tenantId: 'nw' }, patches: { 'metadata.version': '2.0.0' } }],
       },
       inputs: { type: 'object', properties: {} },
-      outputs: { type: 'object', properties: {} },
+       outputs: { type: 'object', properties: {}, required: [], additionalProperties: false },
       environmentBindings: {},
       steps: [
         {
@@ -181,12 +293,21 @@ describe('deterministic replay (integration)', () => {
       inputs: {},
       headless: true,
       runsDir: RUNS_DIR,
+      tenantId: 'nw',
+      capabilitiesDir: path.join(RUNS_DIR, 'variant-ledger'),
     });
 
     expect(result.status).toBe('FAILED');
     expect(result.failure?.errorClass).toBe('POLICY_BLOCKED');
     expect(result.failure?.phase).toBe('locate'); // blocked before any interaction
     expect(result.timeline.some((t) => t.ok && t.stepId === 's1')).toBe(false);
+    const variantSnapshot = fs.readFileSync(path.join(RUNS_DIR, result.runId, result.artifactDefinitionRef!));
+    expect(crypto.createHash('sha256').update(variantSnapshot).digest('hex')).toBe(result.artifactSha256);
+    expect(JSON.parse(variantSnapshot.toString('utf8')).metadata.version).toBe('2.0.0');
+    const variantLedger = fs.readFileSync(path.join(RUNS_DIR, 'variant-ledger', 'test.policy-frame.validation.jsonl'), 'utf8')
+      .trim().split('\n').map((line) => JSON.parse(line) as { runId?: string; artifactSha256?: string })
+      .find((row) => row.runId === result.runId);
+    expect(variantLedger?.artifactSha256).toBe(result.artifactSha256);
 
     // Verify ZERO clicks via SERVER-SIDE state (not a client-side flag on a
     // fresh page — that only proves the new page wasn't clicked).

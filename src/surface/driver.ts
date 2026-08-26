@@ -90,6 +90,10 @@ export class PlaywrightWebDriver implements SurfaceDriver {
     this.browser = await chromium.launch({
       headless: this.opts.headless,
       args: ['--window-size=1480,1000'],
+      env: {
+        ...process.env,
+        CHROME_LOG_FILE: process.platform === 'win32' ? 'NUL' : '/dev/null',
+      },
     });
     this.context = await this.browser.newContext({ viewport: this.opts.viewport });
     this._page = await this.context.newPage();

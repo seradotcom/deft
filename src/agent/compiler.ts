@@ -15,6 +15,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   CapabilityArtifactSchema,
+  normalizeOutputSchema,
   type BusinessOutcome,
   type CapabilityArtifact,
   type Step,
@@ -206,7 +207,7 @@ export function compileCapability(
         Object.keys(opts.inputs).map((k) => [k, { type: 'string', title: k }])
       ),
     },
-    outputs: opts.outputsSchema,
+    outputs: normalizeOutputSchema(opts.outputsSchema),
     environmentBindings: {
       username: { source: 'envVar', name: 'LEGACYBANK_USER', sensitive: false },
       password: { source: 'envVar', name: 'LEGACYBANK_PASSWORD', sensitive: true },

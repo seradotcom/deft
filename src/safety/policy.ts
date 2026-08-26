@@ -67,9 +67,11 @@ export class PolicyEngine {
         const p = new URL(prefix);
         if (parsed!.origin !== p.origin) return false;
         // Exact path boundary: /acme must NOT match /acmeevil
-        const allowedPath = p.pathname.replace(/\/$/, '');
+        // An origin-root base URL permits every path on that same origin;
+        // tenant-scoped bases retain their exact path boundary.
+        const allowedPath = p.pathname === '/' ? '' : p.pathname.replace(/\/$/, '');
         const actualPath = parsed!.pathname;
-        return actualPath === allowedPath || actualPath.startsWith(allowedPath + '/');
+        return allowedPath === '' || actualPath === allowedPath || actualPath.startsWith(allowedPath + '/');
       } catch {
         return url.startsWith(prefix);
       }

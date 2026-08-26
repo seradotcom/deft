@@ -45,7 +45,9 @@
   },
   "outputs": {
     "type": "object",
-    "properties": {}
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
   },
   "environmentBindings": {
     "username": {

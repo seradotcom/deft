@@ -49,7 +49,9 @@
         "type": "string",
         "description": "read from table column \"Balance\""
       }
-    }
+    },
+    "required": ["savingsBalance"],
+    "additionalProperties": false
   },
   "environmentBindings": {
     "username": {

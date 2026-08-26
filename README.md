@@ -60,14 +60,17 @@ node dist/cli/index.js discover \
   --outcome "MEMBER_NOT_FOUND=pageTextContains:'No matching member records were found'"
 ```
 
-Then replay the capability just created — deterministically, no model, no API key:
+Then replay the capability just created — deterministically, no model, no API key.
+`--escalate` keeps the run fail-closed if discovery recorded a form submission
+(for example, typing the member ID and pressing Enter): the operator console asks
+for approval before replay crosses that step.
 
 ```bash
-node dist/cli/index.js replay legacybank.demo-lookup-member-balance --input memberId=M10041
+node dist/cli/index.js replay legacybank.demo-lookup-member-balance --input memberId=M10041 --escalate
 # → { "status": "SUCCESS", "outputs": { "savingsBalance": "$2,450.75" } }
 
 # Expected business result (not an error):
-node dist/cli/index.js replay legacybank.demo-lookup-member-balance --input memberId=M99999
+node dist/cli/index.js replay legacybank.demo-lookup-member-balance --input memberId=M99999 --escalate
 # → { "status": "BUSINESS_OUTCOME", "businessOutcome": { "code": "MEMBER_NOT_FOUND" } }
 
 # Curated multi-tenant release capability (do not rediscover it):

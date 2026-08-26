@@ -10,7 +10,7 @@
  *    coordinates become real mouse events; element refs become semantic
  *    clicks. Both produce identical evidence.
  */
-import { chromium, type Browser, type BrowserContext, type Frame, type JSHandle, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Dialog, type Frame, type JSHandle, type Page } from 'playwright';
 import os from 'node:os';
 import path from 'node:path';
 import type {
@@ -47,6 +47,13 @@ export interface SurfaceDriver {
   disarmNextDialog(): void;
   /** Wait for the currently armed expected dialog to be consumed, bounded. */
   waitForExpectedDialog(timeoutMs?: number): Promise<boolean>;
+  /** Lease native dialog handling to one human intervention session. */
+  beginHumanControl(sessionId: string): void;
+  /** End a human dialog lease, dismissing a still-pending dialog safely. */
+  endHumanControl(sessionId: string): Promise<void>;
+  /** Resolve a native dialog held by the matching human session. */
+  resolveHumanDialog(sessionId: string, action: 'accept' | 'dismiss'): Promise<void>;
+  humanDialogState(): { pending: boolean; sessionId?: string };
   // Recorder/compiler helpers:
   factsAtGridPoint(x999: number, y999: number): Promise<ElementFacts | null>;
   /** Facts for an [eN] ref from the latest observation (for verified recording). */
@@ -116,6 +123,18 @@ export class PlaywrightWebDriver implements SurfaceDriver {
     // confirmation/transfer/delete dialog must NOT be accepted by
     // infrastructure. Steps that EXPECT a dialog set acceptNextDialog.
     p.on('dialog', async (d) => {
+      const humanSession = this.humanControlSession;
+      if (humanSession) {
+        this.eventLog.push({
+          kind: 'dialog',
+          detail: `${d.type()}: ${d.message()}`.slice(0, 300),
+          at: new Date().toISOString(),
+          control: 'human',
+          sessionId: humanSession,
+        });
+        await this.holdHumanDialog(d, humanSession);
+        return;
+      }
       const accepted = this._acceptNextDialog;
       this._acceptNextDialog = false; // one-shot
       this.eventLog.push({
@@ -142,6 +161,14 @@ export class PlaywrightWebDriver implements SurfaceDriver {
 
   private _acceptNextDialog = false;
   private expectedDialogWaiter: { promise: Promise<boolean>; resolve: (consumed: boolean) => void } | null = null;
+  private humanControlSession: string | null = null;
+  private pendingHumanDialog: { dialog: Dialog; sessionId: string; release: () => void } | null = null;
+
+  private async holdHumanDialog(dialog: Dialog, sessionId: string): Promise<void> {
+    await new Promise<void>((resolve) => {
+      this.pendingHumanDialog = { dialog, sessionId, release: resolve };
+    });
+  }
   /** One-shot: the next native dialog will be ACCEPTED instead of dismissed.
    *  Called by the engine when the artifact's step declares expectsDialog. */
   acceptNextDialog(): void {
@@ -168,6 +195,48 @@ export class PlaywrightWebDriver implements SurfaceDriver {
       waiter.promise,
       new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); }),
     ]).finally(() => { if (timer) clearTimeout(timer); });
+  }
+
+  beginHumanControl(sessionId: string): void {
+    if (!sessionId.trim()) throw new Error('human dialog lease requires a session id');
+    if (this.humanControlSession && this.humanControlSession !== sessionId) {
+      throw new Error('another human dialog session already owns the lease');
+    }
+    this.humanControlSession = sessionId;
+  }
+
+  async endHumanControl(sessionId: string): Promise<void> {
+    if (this.humanControlSession !== sessionId) {
+      throw new Error('human dialog lease session mismatch');
+    }
+    if (this.pendingHumanDialog) await this.resolveHumanDialog(sessionId, 'dismiss');
+    this.humanControlSession = null;
+  }
+
+  async resolveHumanDialog(sessionId: string, action: 'accept' | 'dismiss'): Promise<void> {
+    const pending = this.pendingHumanDialog;
+    if (!pending || this.humanControlSession !== sessionId || pending.sessionId !== sessionId) {
+      throw new Error('human dialog session mismatch or no pending dialog');
+    }
+    try {
+      if (action === 'accept') await pending.dialog.accept();
+      else await pending.dialog.dismiss();
+      this.pendingHumanDialog = null;
+      const event = [...this.eventLog].reverse().find((candidate) =>
+        candidate.kind === 'dialog' && candidate.control === 'human' && candidate.sessionId === sessionId,
+      );
+      if (event && event.kind === 'dialog') event.accepted = action === 'accept';
+    } finally {
+      pending.release();
+    }
+  }
+
+  humanDialogState(): { pending: boolean; sessionId?: string } {
+    return this.pendingHumanDialog
+      ? { pending: true, sessionId: this.pendingHumanDialog.sessionId }
+      : this.humanControlSession
+        ? { pending: false, sessionId: this.humanControlSession }
+        : { pending: false };
   }
 
   async close(): Promise<void> {

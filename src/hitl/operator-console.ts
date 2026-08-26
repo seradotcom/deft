@@ -17,17 +17,24 @@ export interface InterventionRequest {
   a11yOutline?: string; afterA11yOutline?: string; urlAtResume?: string;
   transitionLogFile: string;
 }
+export interface DialogLease {
+  begin?: () => void | Promise<void>;
+  isPending: () => boolean;
+  resolve?: (action: 'accept' | 'dismiss') => Promise<void>;
+  cleanup?: () => Promise<void>;
+}
 export interface InterventionResult {
   state: 'RESUMED' | 'ABORTED' | 'APPROVED'; sessionId: string; before: Observation;
   after?: Observation; humanStateChanges: number;
 }
-type PendingIntervention = { request: InterventionRequest; before: Observation; observeCurrent: () => Promise<Observation> };
+type PendingIntervention = { request: InterventionRequest; before: Observation; observeCurrent: () => Promise<Observation>; dialogLease?: DialogLease };
 
 export class OperatorConsole {
   private app!: Express;
   private server!: Server;
   private interventions = new Map<string, PendingIntervention>();
   private resolvers = new Map<string, (value: InterventionResult) => void>();
+  private takeoverInFlight = new Set<string>();
 
   constructor(private readonly port: number, private readonly evidenceDir: string) { fs.mkdirSync(evidenceDir, { recursive: true }); }
 
@@ -36,7 +43,12 @@ export class OperatorConsole {
     if (!address || typeof address === 'string') throw new Error('operator console is not listening');
     return `http://127.0.0.1:${address.port}`;
   }
-  listInterventions(): InterventionRequest[] { return [...this.interventions.values()].map(({ request }) => ({ ...request })); }
+  listInterventions(): (InterventionRequest & { dialogPending?: boolean })[] {
+    return [...this.interventions.values()].map(({ request, dialogLease }) => ({
+      ...request,
+      ...(dialogLease ? { dialogPending: dialogLease.isPending() } : {}),
+    }));
+  }
 
   start(): Promise<void> {
     this.app = express();
@@ -51,6 +63,7 @@ export class OperatorConsole {
     this.app.post('/api/interventions/:id/approve', (req, res) => this.approve(req, res));
     this.app.post('/api/interventions/:id/takeover', (req, res) => this.takeover(req, res));
     this.app.post('/api/interventions/:id/resume', (req, res) => void this.resume(req, res));
+    this.app.post('/api/interventions/:id/dialog', (req, res) => void this.resolveDialog(req, res));
     this.app.post('/api/interventions/:id/abort', (req, res) => this.abort(req, res));
     return new Promise((resolve) => { this.server = createServer(this.app); this.server.listen(this.port, '127.0.0.1', resolve); });
   }
@@ -60,6 +73,7 @@ export class OperatorConsole {
     kind?: InterventionKind; source: 'discovery' | 'replay'; reason: string; sessionId?: string;
     observation: Observation; observeCurrent?: () => Promise<Observation>;
     saveShot?: (base64: string, tag: string) => Promise<string>;
+    dialogLease?: DialogLease;
   }): Promise<InterventionResult> {
     const id = randomUUID().slice(0, 8);
     const kind = input.kind ?? 'approval';
@@ -78,7 +92,7 @@ export class OperatorConsole {
       transitionLogFile: path.join(this.evidenceDir, `intervention-${id}.jsonl`),
       ...(screenshotFile ? { screenshotFile } : {}), a11yOutline: input.observation.a11yAnnotatedYaml.slice(0, 4000),
     };
-    this.interventions.set(id, { request, before: input.observation, observeCurrent: input.observeCurrent ?? (async () => input.observation) });
+    this.interventions.set(id, { request, before: input.observation, observeCurrent: input.observeCurrent ?? (async () => input.observation), dialogLease: input.dialogLease });
     this.persist(request, 'PENDING');
     return new Promise((resolve) => this.resolvers.set(id, resolve));
   }
@@ -93,14 +107,23 @@ export class OperatorConsole {
   private takeover(req: Request, res: Response): void {
     const item = this.lookup(req, res); if (!item) return;
     if (item.request.kind !== 'manual_takeover' || item.request.state !== 'PENDING' || req.body?.sessionId !== item.request.sessionId) return conflict(res);
-    item.request.state = 'HUMAN_CONTROL'; this.persist(item.request, 'HUMAN_CONTROL'); res.json({ ok: true });
+    if (this.takeoverInFlight.has(item.request.id)) return conflict(res);
+    this.takeoverInFlight.add(item.request.id);
+    Promise.resolve(item.dialogLease?.begin?.()).then(() => {
+      item.request.state = 'HUMAN_CONTROL'; this.persist(item.request, 'HUMAN_CONTROL'); res.json({ ok: true });
+    }).catch(async () => {
+      try { await item.dialogLease?.cleanup?.(); } catch { /* transition remains pending */ }
+      conflict(res);
+    }).finally(() => this.takeoverInFlight.delete(item.request.id));
   }
   private async resume(req: Request, res: Response): Promise<void> {
     const item = this.lookup(req, res); if (!item) return;
     if (item.request.kind !== 'manual_takeover' || item.request.state !== 'HUMAN_CONTROL' || req.body?.sessionId !== item.request.sessionId) return conflict(res);
+    if (item.dialogLease?.isPending()) return conflict(res);
     const after = await item.observeCurrent();
     const afterHash = semanticHash(after);
     if (afterHash === item.request.beforeSemanticHash) return conflict(res);
+    try { await item.dialogLease?.cleanup?.(); } catch { return conflict(res); }
     let afterScreenshotFile: string | undefined;
     if (after.screenshotBase64) {
       afterScreenshotFile = path.join(this.evidenceDir, `intervention-${item.request.id}-after.png`);
@@ -116,9 +139,21 @@ export class OperatorConsole {
     this.finish(item, { state: 'RESUMED', sessionId: item.request.sessionId, before: item.before, after, humanStateChanges: 1 });
     res.json({ ok: true });
   }
-  private abort(req: Request, res: Response): void {
+  private async resolveDialog(req: Request, res: Response): Promise<void> {
+    const item = this.lookup(req, res); if (!item) return;
+    if (item.request.kind !== 'manual_takeover' || item.request.state !== 'HUMAN_CONTROL' || req.body?.sessionId !== item.request.sessionId) return conflict(res);
+    if (!item.dialogLease?.resolve || !item.dialogLease.isPending() || !['accept', 'dismiss'].includes(req.body?.action)) return conflict(res);
+    try {
+      await item.dialogLease.resolve(req.body.action);
+      res.json({ ok: true });
+    } catch {
+      conflict(res);
+    }
+  }
+  private async abort(req: Request, res: Response): Promise<void> {
     const item = this.lookup(req, res); if (!item) return;
     if (!['PENDING', 'HUMAN_CONTROL'].includes(item.request.state)) return conflict(res);
+    try { await item.dialogLease?.cleanup?.(); } catch { /* terminal abort still releases the intervention */ }
     item.request.state = 'ABORTED'; this.persist(item.request, 'ABORTED');
     this.finish(item, { state: 'ABORTED', sessionId: item.request.sessionId, before: item.before, humanStateChanges: item.request.humanStateChanges });
     res.json({ ok: true });
@@ -139,13 +174,16 @@ function conflict(res: Response): void { res.status(409).json({ ok: false, error
 function semanticHash(o: Observation): string {
   return createHash('sha256').update(JSON.stringify({ url: o.url, title: o.title, a11y: o.a11yAnnotatedYaml, frames: o.frames })).digest('hex');
 }
-function renderCard(i: InterventionRequest): string {
+function renderCard(i: InterventionRequest & { dialogPending?: boolean }): string {
   const shot = i.screenshotFile ? `<img src="/evidence/${encodeURIComponent(path.basename(i.screenshotFile))}" style="max-width:640px">` : '';
   const post = (action: string, body = '{}') => `fetch('/api/interventions/${i.id}/${action}',{method:'POST',headers:{'content-type':'application/json'},body:${body}}).then(()=>location.reload())`;
   const sessionBody = `JSON.stringify({sessionId:'${escapeHtml(i.sessionId)}'})`;
+  const dialogControls = i.kind === 'manual_takeover' && i.state === 'HUMAN_CONTROL' && i.dialogPending
+    ? `<button onclick="${post('dialog', `JSON.stringify({sessionId:'${escapeHtml(i.sessionId)}',action:'accept'})`)}">Accept dialog</button><button onclick="${post('dialog', `JSON.stringify({sessionId:'${escapeHtml(i.sessionId)}',action:'dismiss'})`)}">Dismiss dialog</button>`
+    : '';
   const controls = i.kind === 'approval'
     ? `<button onclick="${post('approve')}">Approve</button>`
-    : `<button onclick="${post('takeover', sessionBody)}">Take control</button><button onclick="${post('resume', sessionBody)}">Resume</button>`;
+    : `<button onclick="${post('takeover', sessionBody)}">Take control</button>${dialogControls}<button onclick="${post('resume', sessionBody)}">Resume</button>`;
   return `<div><h3>${escapeHtml(i.source)} · ${i.kind} · ${i.state}</h3><p>${escapeHtml(i.reason)}</p>${shot}<details><summary>Accessibility outline</summary><pre>${escapeHtml(i.a11yOutline ?? '')}</pre></details>${controls}<button onclick="${post('abort')}">Abort</button></div>`;
 }
 function escapeHtml(s: string): string { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }

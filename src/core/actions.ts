@@ -109,6 +109,8 @@ export interface SurfaceEvent {
   detail: string;
   at: string;
   accepted?: boolean;
+  control?: 'automation' | 'human';
+  sessionId?: string;
 }
 
 /** Raw execution outcome of one agent action on the live surface. */

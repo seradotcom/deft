@@ -991,27 +991,59 @@ async function manualTakeover(
     urlAtPause: observation.url, frameUrls: observation.frames.map((frame) => frame.url),
     beforeSemanticHash, beforeShot,
   });
-  const result = await opts.onManualTakeover({ reason, observation, sessionId, observeCurrent: () => ctx.driver.observe() });
-  const after = await ctx.driver.observe();
-  const afterSemanticHash = semanticObservationHash(after);
-  const afterShot = await ctx.evidence.saveShot(after.screenshotBase64, `manual-after-${step.id}`);
-  const humanStateChanges = beforeSemanticState === semanticObservation(after) ? 0 : 1;
-  const sameSession = result.sessionId === sessionId;
-  const resumed = sameSession && result.state === 'RESUMED' && humanStateChanges >= 1;
-  const aborted = sameSession && result.state === 'ABORTED';
-  ctx.escalation = {
-    interventionId: `takeover-${step.id}`, reason, resumedByHuman: resumed,
-    humanSamplesCaptured: 2, humanStateChanges,
-  };
-  ctx.evidence.write({
-    type: resumed ? 'manual_takeover_resumed' : aborted ? 'manual_takeover_aborted' : 'manual_takeover_invalid',
-    stepId: step.id, sessionId, returnedSessionId: result.sessionId, humanStateChanges,
-    beforeSemanticHash, afterSemanticHash, beforeShot, afterShot,
-    urlBefore: observation.url, urlAfter: after.url,
-    frameUrlsBefore: observation.frames.map((frame) => frame.url),
-    frameUrlsAfter: after.frames.map((frame) => frame.url),
-  });
-  return resumed ? 'resumed' : aborted ? 'aborted' : 'invalid';
+  let result: Awaited<ReturnType<NonNullable<ReplayOptions['onManualTakeover']>>>;
+  try {
+    result = await opts.onManualTakeover({
+      reason,
+      observation,
+      sessionId,
+      observeCurrent: () => ctx.driver.observe(),
+      dialogLease: {
+        begin: () => ctx.driver.beginHumanControl(sessionId),
+        isPending: () => ctx.driver.humanDialogState().pending,
+        resolve: (action) => ctx.driver.resolveHumanDialog(sessionId, action),
+        cleanup: () => ctx.driver.endHumanControl(sessionId),
+      },
+    });
+  } catch (error) {
+    await ctx.driver.endHumanControl(sessionId).catch(() => undefined);
+    ctx.evidence.write({
+      type: 'manual_takeover_error', stepId: step.id, sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 'invalid';
+  }
+  try {
+    if (result.state === 'RESUMED' && ctx.driver.humanDialogState().pending) return 'invalid';
+    const after = await ctx.driver.observe();
+    const afterSemanticHash = semanticObservationHash(after);
+    const afterShot = await ctx.evidence.saveShot(after.screenshotBase64, `manual-after-${step.id}`);
+    const humanStateChanges = beforeSemanticState === semanticObservation(after) ? 0 : 1;
+    const sameSession = result.sessionId === sessionId;
+    const resumed = sameSession && result.state === 'RESUMED' && humanStateChanges >= 1;
+    const aborted = sameSession && result.state === 'ABORTED';
+    ctx.escalation = {
+      interventionId: `takeover-${step.id}`, reason, resumedByHuman: resumed,
+      humanSamplesCaptured: 2, humanStateChanges,
+    };
+    ctx.evidence.write({
+      type: resumed ? 'manual_takeover_resumed' : aborted ? 'manual_takeover_aborted' : 'manual_takeover_invalid',
+      stepId: step.id, sessionId, returnedSessionId: result.sessionId, humanStateChanges,
+      beforeSemanticHash, afterSemanticHash, beforeShot, afterShot,
+      urlBefore: observation.url, urlAfter: after.url,
+      frameUrlsBefore: observation.frames.map((frame) => frame.url),
+      frameUrlsAfter: after.frames.map((frame) => frame.url),
+    });
+    return resumed ? 'resumed' : aborted ? 'aborted' : 'invalid';
+  } catch (error) {
+    ctx.evidence.write({
+      type: 'manual_takeover_error', stepId: step.id, sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 'invalid';
+  } finally {
+    await ctx.driver.endHumanControl(sessionId).catch(() => undefined);
+  }
 
 }
 

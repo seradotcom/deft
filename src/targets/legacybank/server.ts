@@ -2,7 +2,7 @@
  * LegacyBank server — Express app with sessions, chaos injection, two tenants.
  *
  * Chaos controller (deterministic fault injection for evidence runs):
- *   POST /:tenant/admin/chaos  { "slowNext" | "interstitialNext" | "expireNow": true }
+ *   POST /:tenant/admin/chaos  { "slowNext" | "interstitialNext" | "expireNow": true, modalOnPath?: "/exact/path" }
  *   POST /:tenant/admin/chaos-all  { "expireNow": true } | { "expireOnPath": "/path" }
  * The REPLAY ENGINE never calls these — the demo harness does, to simulate
  * legitimate runtime conditions of a real institution's app.
@@ -29,7 +29,7 @@ interface Session {
   tenantId: string;
   userId: string;
   lastSeen: number;
-  chaos: { slowNext?: boolean; interstitialNext?: boolean; expireNow?: boolean; modalNext?: boolean };
+  chaos: { slowNext?: boolean; interstitialNext?: boolean; expireNow?: boolean; modalNext?: boolean; modalOnPath?: string };
 }
 
 declare global {
@@ -128,8 +128,9 @@ export function createLegacyBankApp(): express.Express {
       // it blocks interaction underneath and forces a real human decision.
       let finalBody = body;
       const s = (req as express.Request & { session?: Session }).session;
-      if (s?.chaos.modalNext) {
+      if (s?.chaos.modalNext || (s?.chaos.modalOnPath && req.path === s.chaos.modalOnPath)) {
         s.chaos.modalNext = false;
+        s.chaos.modalOnPath = undefined;
         const overlay = [
           '<div id="unexpected-overlay" style="position:fixed;inset:0;background:rgba(20,20,20,.55);z-index:9999">',
           '<div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);background:#fff;border:2px solid #444;padding:18px;font-family:Tahoma">',
@@ -399,10 +400,11 @@ export function createLegacyBankApp(): express.Express {
       res.status(400).json({ ok: false, error: 'no active session for tenant' });
       return;
     }
-    const body = req.body as Record<string, boolean>;
+    const body = req.body as Record<string, unknown>;
     for (const key of ['slowNext', 'interstitialNext', 'expireNow', 'modalNext'] as const) {
       if (body[key]) session.chaos[key] = true;
     }
+    if (typeof body.modalOnPath === 'string' && body.modalOnPath.startsWith('/')) session.chaos.modalOnPath = body.modalOnPath;
     res.json({ ok: true, chaos: session.chaos });
   });
 

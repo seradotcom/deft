@@ -219,6 +219,7 @@ program
               kind: 'manual_takeover', source: 'replay', reason: info.reason,
               sessionId: info.sessionId, observation: info.observation,
               observeCurrent: info.observeCurrent,
+              dialogLease: info.dialogLease,
             });
           }
         : undefined,

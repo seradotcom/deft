@@ -43,7 +43,18 @@ export interface ReplayOptions {
    * a11y) — that audit trail IS the record of what the human did.
    */
   onEscalation?: (info: { reason: string; observation: Observation }) => Promise<boolean>;
-  onManualTakeover?: (info: { reason: string; observation: Observation; sessionId: string; observeCurrent: () => Promise<Observation> }) => Promise<InterventionResult>;
+  onManualTakeover?: (info: {
+    reason: string;
+    observation: Observation;
+    sessionId: string;
+    observeCurrent: () => Promise<Observation>;
+    dialogLease: {
+      begin: () => void | Promise<void>;
+      isPending: () => boolean;
+      resolve: (action: 'accept' | 'dismiss') => Promise<void>;
+      cleanup: () => Promise<void>;
+    };
+  }) => Promise<InterventionResult>;
 }
 
 export interface Ctx {

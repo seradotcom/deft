@@ -1,40 +1,40 @@
-{"t":"2026-08-26T05:15:19.019Z","type":"run_start","runId":"replay-2026-08-26T05-15-19-017Z-e2e18b","kind":"replay","label":"legacybank.lookup-member-balance"}
-{"t":"2026-08-26T05:15:19.022Z","type":"artifact_definition","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","definitionRef":"artifact.executed.json"}
-{"t":"2026-08-26T05:15:19.022Z","type":"replay_start","capability":"legacybank.lookup-member-balance","version":"2.0.0","tenant":"base"}
-{"t":"2026-08-26T05:15:20.136Z","type":"step_start","stepId":"auth1","intent":"Enter operator user ID (engine-side)","action":"fill","mode":"auth","attempt":1}
-{"t":"2026-08-26T05:15:20.210Z","type":"located","stepId":"auth1","viaFallback":false,"fingerprintScore":0.8}
-{"t":"2026-08-26T05:15:20.901Z","type":"after_step","stepId":"auth1","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\002-ok-auth1.png"}
-{"t":"2026-08-26T05:15:20.901Z","type":"step_ok","stepId":"auth1","ms":765,"mode":"auth","attempt":1}
-{"t":"2026-08-26T05:15:20.901Z","type":"step_start","stepId":"auth2","intent":"Enter operator password (engine-side)","action":"fill","mode":"auth","attempt":1}
-{"t":"2026-08-26T05:15:20.917Z","type":"located","stepId":"auth2","viaFallback":false,"fingerprintScore":0.8}
-{"t":"2026-08-26T05:15:21.617Z","type":"after_step","stepId":"auth2","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\003-ok-auth2.png"}
-{"t":"2026-08-26T05:15:21.617Z","type":"step_ok","stepId":"auth2","ms":716,"mode":"auth","attempt":1}
-{"t":"2026-08-26T05:15:21.618Z","type":"step_start","stepId":"auth3","intent":"Submit credentials (engine-side)","action":"click","mode":"auth","attempt":1}
-{"t":"2026-08-26T05:15:21.635Z","type":"located","stepId":"auth3","viaFallback":false,"fingerprintScore":1}
-{"t":"2026-08-26T05:15:23.170Z","type":"after_step","stepId":"auth3","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/home.aspx"],"shot":"shots\\004-ok-auth3.png"}
-{"t":"2026-08-26T05:15:23.171Z","type":"step_ok","stepId":"auth3","ms":1553,"mode":"auth","attempt":1}
-{"t":"2026-08-26T05:15:23.171Z","type":"step_start","stepId":"s1","intent":"Click Member Search","action":"click","mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:23.214Z","type":"located","stepId":"s1","viaFallback":false,"fingerprintScore":0.65}
-{"t":"2026-08-26T05:15:24.567Z","type":"after_step","stepId":"s1","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/search.aspx"],"shot":"shots\\005-ok-s1.png"}
-{"t":"2026-08-26T05:15:24.567Z","type":"step_ok","stepId":"s1","ms":1396,"mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:24.568Z","type":"step_start","stepId":"s2","intent":"Type into member id","action":"fill","mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:24.607Z","type":"located","stepId":"s2","viaFallback":false,"fingerprintScore":0.8}
-{"t":"2026-08-26T05:15:25.270Z","type":"after_step","stepId":"s2","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/search.aspx"],"shot":"shots\\006-ok-s2.png"}
-{"t":"2026-08-26T05:15:25.270Z","type":"step_ok","stepId":"s2","ms":702,"mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:25.271Z","type":"step_start","stepId":"s3","intent":"Press Enter to submit (member id)","action":"press","mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:25.287Z","type":"located","stepId":"s3","viaFallback":false,"fingerprintScore":0.8}
-{"t":"2026-08-26T05:15:26.741Z","type":"after_step","stepId":"s3","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/results.aspx"],"shot":"shots\\007-ok-s3.png"}
-{"t":"2026-08-26T05:15:26.742Z","type":"step_ok","stepId":"s3","ms":1471,"mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:26.742Z","type":"step_start","stepId":"s4","intent":"Click Select","action":"click","mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:26.776Z","type":"located","stepId":"s4","viaFallback":false,"fingerprintScore":0.9}
-{"t":"2026-08-26T05:15:28.251Z","type":"after_step","stepId":"s4","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/detail.aspx?id=M10041"],"shot":"shots\\008-ok-s4.png"}
-{"t":"2026-08-26T05:15:28.251Z","type":"step_ok","stepId":"s4","ms":1509,"mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:28.252Z","type":"step_start","stepId":"x5","intent":"Read savingsBalance: cell of column \"Balance\" in the row where Account Type = Savings","action":"extract","mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:28.256Z","type":"extract_debug","stepId":"x5","frameUrl":"http://localhost:7788/acme/detail.aspx?id=M10041","tableCount":2}
-{"t":"2026-08-26T05:15:28.258Z","type":"extract","stepId":"x5","found":true}
-{"t":"2026-08-26T05:15:28.302Z","type":"after_step","stepId":"x5","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/detail.aspx?id=M10041"],"shot":"shots\\009-ok-x5.png"}
-{"t":"2026-08-26T05:15:28.303Z","type":"step_ok","stepId":"x5","ms":51,"mode":"normal","attempt":1}
-{"t":"2026-08-26T05:15:28.304Z","type":"final_check","assert":"urlMatchesGlob","ok":true}
-{"t":"2026-08-26T05:15:30.332Z","type":"final_check","assert":"pageTextContains","ok":true}
-{"t":"2026-08-26T05:15:30.926Z","type":"ledger_appended","status":"SUCCESS","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","degradedSteps":0}
-{"t":"2026-08-26T05:15:30.926Z","type":"replay_result","runId":"replay-2026-08-26T05-15-19-017Z-e2e18b","capabilityId":"legacybank.lookup-member-balance","capabilityVersion":"2.0.0","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","artifactDefinitionRef":"artifact.executed.json","status":"SUCCESS","outputs":{"savingsBalance":"«40f781f6»"},"timeline":[{"stepId":"auth1","intent":"Enter operator user ID (engine-side)","phase":"act","ok":true,"ms":726},{"stepId":"auth2","intent":"Enter operator password (engine-side)","phase":"act","ok":true,"ms":670},{"stepId":"auth3","intent":"Submit credentials (engine-side)","phase":"act","ok":true,"ms":1511},{"stepId":"s1","intent":"Click Member Search","phase":"act","ok":true,"ms":1358},{"stepId":"s2","intent":"Type into member id","phase":"act","ok":true,"ms":668},{"stepId":"s3","intent":"Press Enter to submit (member id)","phase":"act","ok":true,"ms":1426},{"stepId":"s4","intent":"Click Select","phase":"act","ok":true,"ms":1476},{"stepId":"x5","intent":"Read savingsBalance: cell of column \"Balance\" in the row where Account Type = Savings","phase":"act","ok":true,"ms":7}],"degradedSteps":[],"startedAt":"2026-08-26T05:15:18.505Z","finishedAt":"2026-08-26T05:15:30.926Z"}
+{"t":"2026-08-26T08:36:20.934Z","type":"run_start","runId":"replay-2026-08-26T08-36-20-932Z-6d8e55","kind":"replay","label":"legacybank.lookup-member-balance"}
+{"t":"2026-08-26T08:36:20.937Z","type":"artifact_definition","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","definitionRef":"artifact.executed.json"}
+{"t":"2026-08-26T08:36:20.937Z","type":"replay_start","capability":"legacybank.lookup-member-balance","version":"2.0.0","tenant":"base"}
+{"t":"2026-08-26T08:36:21.337Z","type":"step_start","stepId":"auth1","intent":"Enter operator user ID (engine-side)","action":"fill","mode":"auth","attempt":1}
+{"t":"2026-08-26T08:36:21.398Z","type":"located","stepId":"auth1","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-26T08:36:22.087Z","type":"after_step","stepId":"auth1","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\002-ok-auth1.png"}
+{"t":"2026-08-26T08:36:22.087Z","type":"step_ok","stepId":"auth1","ms":750,"mode":"auth","attempt":1}
+{"t":"2026-08-26T08:36:22.088Z","type":"step_start","stepId":"auth2","intent":"Enter operator password (engine-side)","action":"fill","mode":"auth","attempt":1}
+{"t":"2026-08-26T08:36:22.119Z","type":"located","stepId":"auth2","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-26T08:36:22.806Z","type":"after_step","stepId":"auth2","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\003-ok-auth2.png"}
+{"t":"2026-08-26T08:36:22.807Z","type":"step_ok","stepId":"auth2","ms":719,"mode":"auth","attempt":1}
+{"t":"2026-08-26T08:36:22.807Z","type":"step_start","stepId":"auth3","intent":"Submit credentials (engine-side)","action":"click","mode":"auth","attempt":1}
+{"t":"2026-08-26T08:36:22.824Z","type":"located","stepId":"auth3","viaFallback":false,"fingerprintScore":1}
+{"t":"2026-08-26T08:36:24.372Z","type":"after_step","stepId":"auth3","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/home.aspx"],"shot":"shots\\004-ok-auth3.png"}
+{"t":"2026-08-26T08:36:24.372Z","type":"step_ok","stepId":"auth3","ms":1565,"mode":"auth","attempt":1}
+{"t":"2026-08-26T08:36:24.373Z","type":"step_start","stepId":"s1","intent":"Click Member Search","action":"click","mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:24.422Z","type":"located","stepId":"s1","viaFallback":false,"fingerprintScore":0.65}
+{"t":"2026-08-26T08:36:25.790Z","type":"after_step","stepId":"s1","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/search.aspx"],"shot":"shots\\005-ok-s1.png"}
+{"t":"2026-08-26T08:36:25.790Z","type":"step_ok","stepId":"s1","ms":1417,"mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:25.791Z","type":"step_start","stepId":"s2","intent":"Type into member id","action":"fill","mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:25.837Z","type":"located","stepId":"s2","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-26T08:36:26.526Z","type":"after_step","stepId":"s2","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/search.aspx"],"shot":"shots\\006-ok-s2.png"}
+{"t":"2026-08-26T08:36:26.527Z","type":"step_ok","stepId":"s2","ms":736,"mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:26.527Z","type":"step_start","stepId":"s3","intent":"Press Enter to submit (member id)","action":"press","mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:26.541Z","type":"located","stepId":"s3","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-26T08:36:28.005Z","type":"after_step","stepId":"s3","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/results.aspx"],"shot":"shots\\007-ok-s3.png"}
+{"t":"2026-08-26T08:36:28.005Z","type":"step_ok","stepId":"s3","ms":1478,"mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:28.005Z","type":"step_start","stepId":"s4","intent":"Click Select","action":"click","mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:28.038Z","type":"located","stepId":"s4","viaFallback":false,"fingerprintScore":0.9}
+{"t":"2026-08-26T08:36:29.527Z","type":"after_step","stepId":"s4","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/detail.aspx?id=M10041"],"shot":"shots\\008-ok-s4.png"}
+{"t":"2026-08-26T08:36:29.527Z","type":"step_ok","stepId":"s4","ms":1522,"mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:29.528Z","type":"step_start","stepId":"x5","intent":"Read savingsBalance: cell of column \"Balance\" in the row where Account Type = Savings","action":"extract","mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:29.532Z","type":"extract_debug","stepId":"x5","frameUrl":"http://localhost:7788/acme/detail.aspx?id=M10041","tableCount":2}
+{"t":"2026-08-26T08:36:29.535Z","type":"extract","stepId":"x5","found":true}
+{"t":"2026-08-26T08:36:29.573Z","type":"after_step","stepId":"x5","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/detail.aspx?id=M10041"],"shot":"shots\\009-ok-x5.png"}
+{"t":"2026-08-26T08:36:29.574Z","type":"step_ok","stepId":"x5","ms":46,"mode":"normal","attempt":1}
+{"t":"2026-08-26T08:36:29.575Z","type":"final_check","assert":"urlMatchesGlob","ok":true}
+{"t":"2026-08-26T08:36:31.601Z","type":"final_check","assert":"pageTextContains","ok":true}
+{"t":"2026-08-26T08:36:31.684Z","type":"ledger_appended","status":"SUCCESS","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","degradedSteps":0}
+{"t":"2026-08-26T08:36:31.684Z","type":"replay_result","runId":"replay-2026-08-26T08-36-20-932Z-6d8e55","capabilityId":"legacybank.lookup-member-balance","capabilityVersion":"2.0.0","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","artifactDefinitionRef":"artifact.executed.json","status":"SUCCESS","outputs":{"savingsBalance":"«40f781f6»"},"timeline":[{"stepId":"auth1","intent":"Enter operator user ID (engine-side)","phase":"act","ok":true,"ms":702},{"stepId":"auth2","intent":"Enter operator password (engine-side)","phase":"act","ok":true,"ms":666},{"stepId":"auth3","intent":"Submit credentials (engine-side)","phase":"act","ok":true,"ms":1526},{"stepId":"s1","intent":"Click Member Search","phase":"act","ok":true,"ms":1367},{"stepId":"s2","intent":"Type into member id","phase":"act","ok":true,"ms":689},{"stepId":"s3","intent":"Press Enter to submit (member id)","phase":"act","ok":true,"ms":1443},{"stepId":"s4","intent":"Click Select","phase":"act","ok":true,"ms":1483},{"stepId":"x5","intent":"Read savingsBalance: cell of column \"Balance\" in the row where Account Type = Savings","phase":"act","ok":true,"ms":8}],"degradedSteps":[],"startedAt":"2026-08-26T08:36:20.377Z","finishedAt":"2026-08-26T08:36:31.684Z"}

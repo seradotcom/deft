@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "runtimeFreezeCommit": "6bd8f50e269b174dc336e50ef1f9720406d15bd8",
-  "generatedAt": "2026-08-26T05:40:13.161Z",
+  "runtimeFreezeCommit": "499ca6ef2fed93572330916c084e7f5bab5f7fff",
+  "generatedAt": "2026-08-26T09:08:42.865Z",
   "artifacts": {
     "legacybank.lookup-member-balance": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
     "legacybank.open-sub-account": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93"
@@ -60,7 +60,7 @@
     {
       "scenario": "replay-success",
       "dir": "evidence/replay-success",
-      "runId": "replay-2026-08-26T05-15-19-017Z-e2e18b",
+      "runId": "replay-2026-08-26T08-36-20-932Z-6d8e55",
       "capabilityId": "legacybank.lookup-member-balance",
       "expectedResult": "SUCCESS",
       "tenant": "base",
@@ -72,12 +72,12 @@
         },
         {
           "path": "ledger.jsonl",
-          "sha256": "62b25f8e033aa285fa48ea2337fc119de938065ffb02fa302571a38442f20fb6",
+          "sha256": "827518ac8c9ca07efa5fb153aaab4a98b4e8c9d17297a9503a98ba31d6c859de",
           "bytes": 288
         },
         {
           "path": "log.jsonl",
-          "sha256": "1b96f54a4b91b60922070a28dfc96ebd946f91a49061241c4a3593bfe3d09eb3",
+          "sha256": "5f07f13a979bd9de95236547ce149f31859cf92e742cccc92263e99301dbb6ce",
           "bytes": 7400
         },
         {
@@ -134,7 +134,7 @@
     {
       "scenario": "replay-business-outcome",
       "dir": "evidence/replay-business-outcome",
-      "runId": "replay-2026-08-26T05-15-31-377Z-a47f36",
+      "runId": "replay-2026-08-26T08-36-32-214Z-e710e5",
       "capabilityId": "legacybank.lookup-member-balance",
       "expectedResult": "BUSINESS_OUTCOME",
       "tenant": "base",
@@ -146,12 +146,12 @@
         },
         {
           "path": "ledger.jsonl",
-          "sha256": "9c1fa2dc20e33606530d8e878bf68eb0d3b2c4e669a27fee56078d72c1721b88",
+          "sha256": "6c4505d51eecfd35d111b8d8b7bad955a1c92e33da1d109b1b1c2b37d8eeb48b",
           "bytes": 297
         },
         {
           "path": "log.jsonl",
-          "sha256": "6ed43ba78ce6827aa9532302cf2745062e4fd93be50e7e0e26f65403fc2f367a",
+          "sha256": "429d2ee26a3a7677110a73113091a5b4acb8274845278876ec23c70ccda3efed",
           "bytes": 5901
         },
         {
@@ -198,7 +198,7 @@
     {
       "scenario": "replay-session-recovery",
       "dir": "evidence/replay-session-recovery",
-      "runId": "replay-2026-08-26T05-16-17-487Z-601389",
+      "runId": "replay-2026-08-26T08-37-17-523Z-835da8",
       "capabilityId": "legacybank.lookup-member-balance",
       "expectedResult": "SUCCESS",
       "tenant": "base",
@@ -210,12 +210,12 @@
         },
         {
           "path": "ledger.jsonl",
-          "sha256": "6a06514525f577e3b98c2981468acbcf7cb782bd369f1ea3807fdf7a5d5fd752",
+          "sha256": "fcd916a4d0e0d3096df5bcf91d2765dd554138093f4552f9019fe867911c79b4",
           "bytes": 288
         },
         {
           "path": "log.jsonl",
-          "sha256": "5cef3b7cdfc5566e8d5addc9be3b68bede2596e8e1f1d148f05f6223e4f3abb4",
+          "sha256": "65af466d19104f3940e545a48f2aa0997b1978af5740c38b1503213509ec4e0f",
           "bytes": 11724
         },
         {
@@ -302,7 +302,7 @@
     {
       "scenario": "replay-cross-tenant",
       "dir": "evidence/replay-cross-tenant",
-      "runId": "replay-2026-08-26T05-16-34-996Z-af10b1",
+      "runId": "replay-2026-08-26T08-37-35-118Z-537c55",
       "capabilityId": "legacybank.lookup-member-balance",
       "expectedResult": "SUCCESS",
       "tenant": "nw",
@@ -314,12 +314,12 @@
         },
         {
           "path": "ledger.jsonl",
-          "sha256": "ad22c6f9bdd44b60a71127cae150679e6d64ae206c0387b88e4dbaaae4e246bf",
+          "sha256": "df754cdb16bd3957fa1ca24246544b9bd9b1e860acf33c4b677c38a964e2e5fe",
           "bytes": 286
         },
         {
           "path": "log.jsonl",
-          "sha256": "1068bd9d0c7dd43ed8406bf244440483c0827b72a023c4f4a5a5e8178d102d8a",
+          "sha256": "836e940760be0e5850a14cd2529bf708afa8eb598871e56b4850195736c491e9",
           "bytes": 7343
         },
         {
@@ -376,7 +376,7 @@
     {
       "scenario": "risky-gating",
       "dir": "evidence/risky-gating",
-      "runId": "replay-2026-08-26T05-17-05-124Z-9c5fe7",
+      "runId": "replay-2026-08-26T08-38-04-526Z-ebd275",
       "capabilityId": "legacybank.open-sub-account",
       "expectedResult": "FAILED",
       "tenant": "base",
@@ -388,12 +388,12 @@
         },
         {
           "path": "ledger.jsonl",
-          "sha256": "ca30fbe69b6df5d74044505b2effc95afd4f1d06c1ae45b8363d72715326f964",
+          "sha256": "a290c1128e7b3049575ae03737093b1fb1863e4aea2f91811b64cd519d0c851d",
           "bytes": 287
         },
         {
           "path": "log.jsonl",
-          "sha256": "6eaa3e190c684b999161530fd96ba305e61c879265e3bdc50e3fb31b91763361",
+          "sha256": "d87dffb8c7e79b35fc9a495cd862c88f4e2bb6431734b9b59c8950b0a5bded94",
           "bytes": 10735
         },
         {
@@ -470,7 +470,7 @@
     {
       "scenario": "hitl-approval",
       "dir": "evidence/hitl-approval",
-      "runId": "replay-2026-08-26T05-17-38-265Z-2cf82f",
+      "runId": "replay-2026-08-26T08-38-31-641Z-1d08e2",
       "capabilityId": "legacybank.open-sub-account",
       "expectedResult": "SUCCESS",
       "tenant": "base",
@@ -482,17 +482,17 @@
         },
         {
           "path": "intervention.jsonl",
-          "sha256": "a035504e4b72ccd8d6137525644fe709af2c398fef8238a69fff601a2ba4a07a",
+          "sha256": "5bb2a8589e18e1582bcd3990021fa2d4fbd57fddd419c90c9a46ef00f7591ebf",
           "bytes": 3858
         },
         {
           "path": "ledger.jsonl",
-          "sha256": "989a52560fb4fd7c8a6c77d06986435a9f30f9b7d5fd84c3391befb8e61357dc",
+          "sha256": "fb35bb4daccab5be5e7470d32a8ac3ad0d6535f71db872ef2cf4b82fe6075e6c",
           "bytes": 288
         },
         {
           "path": "log.jsonl",
-          "sha256": "f5bf8161fdc7cbd8ba3d9a64be341d8542371a785e5dda957e73bb905ba3e98d",
+          "sha256": "88f38e776fa1758d1274f7e2e3096a1f7cb47a3e9b8eb79732683e4099deabae",
           "bytes": 11257
         },
         {
@@ -562,8 +562,8 @@
         },
         {
           "path": "shots/014-ok-s13.png",
-          "sha256": "894544213978b0557a8b81640fdc32857ee9f6e28cb403e68acfab7e3dfb220d",
-          "bytes": 17878
+          "sha256": "19f7c1c085443a83ef56d96b62b00976721f2bec43d86c542bf10bb0fddf9060",
+          "bytes": 17795
         }
       ],
       "artifactDefinition": "artifact.executed.json",
@@ -575,20 +575,20 @@
     {
       "scenario": "hitl-manual-takeover",
       "dir": "evidence/hitl-manual-takeover",
-      "runId": "replay-2026-08-26T05-09-32-138Z-5f886f",
+      "runId": "replay-2026-08-26T08-58-58-913Z-8e73de",
       "capabilityId": "legacybank.open-sub-account",
       "expectedResult": "SUCCESS",
       "tenant": "base",
       "files": [
         {
           "path": "after.json",
-          "sha256": "e9dc44f6f2ce98870e70b4042c5a5bec65df0a3994622d9492802824b0972310",
+          "sha256": "2dea8ffe01532049846127a8aa16ccd750af75778c4d78b8faaca7834a444b87",
           "bytes": 1299
         },
         {
           "path": "after.png",
-          "sha256": "94fcd33d7ff56b2a282bd2324d6e1d6e18e9ef34f491b3a83cbd3940edb77486",
-          "bytes": 17838
+          "sha256": "b6ea285eb23aa510e9d417e7fd920019a2ca112b25c348a4c26693a881368725",
+          "bytes": 17878
         },
         {
           "path": "artifact.executed.json",
@@ -607,17 +607,17 @@
         },
         {
           "path": "intervention.jsonl",
-          "sha256": "b32111e698f168790e2902bd903131c5a8c17a63f18d7cd410fd1a5d25ad36e3",
+          "sha256": "12bb3e7cd4196156db5815a19bbaf72f5c08b90e5a2746b301d0de556c211370",
           "bytes": 7669
         },
         {
           "path": "ledger.jsonl",
-          "sha256": "941d075c54ca85330664cbe93b3a9fc5b5aa479175c7f40888dc490300b1d3fd",
+          "sha256": "2cb514ef0d35284a1a7dc86d068f7ed35aeeb4b50e4f5f247d1ec024453aa6a7",
           "bytes": 287
         },
         {
           "path": "log.jsonl",
-          "sha256": "5e14e0f61ab12df9acccd24ced0f987e7ca972da72fb51f18ba197cab476cf2f",
+          "sha256": "76cf8a5f631bbebe3e4b9f80711ec5b100f8feda31aecd1bec254b96306877b2",
           "bytes": 13682
         },
         {
@@ -692,13 +692,13 @@
         },
         {
           "path": "shots/015-manual-after-s13.png",
-          "sha256": "94fcd33d7ff56b2a282bd2324d6e1d6e18e9ef34f491b3a83cbd3940edb77486",
-          "bytes": 17838
+          "sha256": "b6ea285eb23aa510e9d417e7fd920019a2ca112b25c348a4c26693a881368725",
+          "bytes": 17878
         },
         {
           "path": "shots/016-ok-s13-manual.png",
-          "sha256": "94fcd33d7ff56b2a282bd2324d6e1d6e18e9ef34f491b3a83cbd3940edb77486",
-          "bytes": 17838
+          "sha256": "b6ea285eb23aa510e9d417e7fd920019a2ca112b25c348a4c26693a881368725",
+          "bytes": 17878
         }
       ],
       "artifactDefinition": "artifact.executed.json",

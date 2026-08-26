@@ -1,6 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-26T05:18:42.387Z",
+  "runtimeFreezeCommit": "6bd8f50e269b174dc336e50ef1f9720406d15bd8",
+  "generatedAt": "2026-08-26T05:24:32.080Z",
   "artifacts": {
     "legacybank.lookup-member-balance": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
     "legacybank.open-sub-account": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93"

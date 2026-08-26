@@ -17,7 +17,11 @@ const scenarioDefinitions = [
 ];
 
 export function generateManifest(root = process.cwd()) {
-  const manifest = { schemaVersion: 2, generatedAt: new Date().toISOString(), artifacts: {}, scenarios: [] };
+  const manifest = {
+    schemaVersion: 2,
+    runtimeFreezeCommit: '6bd8f50e269b174dc336e50ef1f9720406d15bd8',
+    generatedAt: new Date().toISOString(), artifacts: {}, scenarios: [],
+  };
   for (const capabilityId of ['legacybank.lookup-member-balance', 'legacybank.open-sub-account']) {
     const file = path.join(root, `capabilities/${capabilityId}.json`);
     if (!fs.existsSync(file)) throw new Error(`missing frozen artifact: ${capabilityId}`);

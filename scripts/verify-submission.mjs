@@ -15,6 +15,7 @@ const frozenArtifacts = {
   'legacybank.lookup-member-balance': { sha256: '720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07', bytes: 18645, version: '2.0.0' },
   'legacybank.open-sub-account': { sha256: '4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93', bytes: 26269, version: '2.0.0' },
 };
+const runtimeFreezeCommit = '6bd8f50e269b174dc336e50ef1f9720406d15bd8';
 
 export function verifySubmission(root = process.cwd(), options = {}) {
   try { return verifySubmissionUnsafe(root, options); }
@@ -29,6 +30,7 @@ function verifySubmissionUnsafe(root, options) {
   if (!fs.existsSync(manifestFile)) return { failures: ['missing evidence/manifest.json'] };
   const manifest = readJson(manifestFile);
   if (manifest.schemaVersion !== 2) fail('manifest schemaVersion must be 2');
+  if (enforceFrozenArtifacts && manifest.runtimeFreezeCommit !== runtimeFreezeCommit) fail('manifest runtime freeze commit mismatch');
   if (options.requireCompleteScenarioSet !== false) {
     const actual = (manifest.scenarios ?? []).map((scenario) => scenario.scenario).sort();
     const required = Object.keys(expectedResults).sort();

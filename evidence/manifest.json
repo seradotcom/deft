@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "runtimeFreezeCommit": "6bd8f50e269b174dc336e50ef1f9720406d15bd8",
-  "generatedAt": "2026-08-26T05:24:32.080Z",
+  "generatedAt": "2026-08-26T05:40:13.161Z",
   "artifacts": {
     "legacybank.lookup-member-balance": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
     "legacybank.open-sub-account": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93"
@@ -17,8 +17,8 @@
       "files": [
         {
           "path": "log.jsonl",
-          "sha256": "934dcf2a738dfa402a30c4a48a601d25393c89218a20a820449bbc9af035564f",
-          "bytes": 2928
+          "sha256": "725d635022aff4ad004ed9970406e4e5f4cc92dc9f8536cc49282643323818c3",
+          "bytes": 2908
         },
         {
           "path": "shots/001-1-before.png",
@@ -52,8 +52,8 @@
         },
         {
           "path": "transcript.json",
-          "sha256": "e441be1f9120eb74603c589b13472e8acf6b92607c440eb171e7bc8012609718",
-          "bytes": 7125
+          "sha256": "978d43d3a6ba38df351e363d020276fa547a91f00880e45af4ba08b662a82b98",
+          "bytes": 6872
         }
       ]
     },

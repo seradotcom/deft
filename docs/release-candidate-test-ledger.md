@@ -104,7 +104,22 @@ The worktree remained free of generated validation ledgers, legacy temporary tes
 - `git diff --check`: PASS.
 - Frozen artifacts remain 18,645 / 26,269 bytes with SHA-256 `720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07` and `4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93` respectively.
 
-Evidence generated before `71811e4` is invalid. All curated replay, approval, and manual-takeover bundles must be produced from this runtime freeze or a later documentation/evidence-only commit.
+Evidence generated before the final runtime freeze listed below is invalid. All curated replay, approval, and manual-takeover bundles must be produced from that exact runtime or a later documentation/evidence-only commit.
+
+## Final evidence freeze — 2026-08-25
+
+- Exact runtime freeze: `6bd8f50e269b174dc336e50ef1f9720406d15bd8` (`feat: audit remote human takeover`). The manifest owns and verifies this full commit ID.
+- Evidence content freeze: `e02ed657c5ee86666f5370c40f4659621e07342c`; runtime-binding metadata: `75346d7`.
+- Eight exact scenarios regenerated from the frozen 2.0.0 artifact bytes. Every replay directory contains `artifact.executed.json`, one terminal run log, one matching ledger row, and a complete SHA-256/byte inventory.
+- Approval evidence: run `replay-2026-08-26T05-17-38-265Z-2cf82f`, transitions exactly `PENDING -> APPROVED`, zero human state changes, no manual takeover claim.
+- Manual evidence: run `replay-2026-08-26T05-09-32-138Z-5f886f`, transitions exactly `PENDING -> HUMAN_CONTROL -> RESUMED` in the same session. Engine audit records two human viewport clicks, one held native dialog accepted by the operator, a real semantic/screenshot delta, one post-checked manual completion, and no recovery retry or fast-forward.
+- The original genuine discovery run remains immutable historical provenance and is verified as such; no claim is made that it executed the later 2.0.0 artifact.
+- Full `npm test`: PASS — 9 files, 103 tests, 263.72 seconds.
+- `npm run typecheck`: PASS.
+- `npm run build`: PASS.
+- `npm run verify:submission`: PASS.
+- Frozen artifact hashes remain `720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07` and `4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93`.
+- Secret/path scan and `git diff --check`: PASS.
 
 ## Release gate
 

@@ -13,6 +13,7 @@ import {
   type ReplayResult,
   type Step,
 } from '../core/artifact.js';
+import type { AgentAction } from '../core/actions.js';
 import type { Locator } from 'playwright';
 import { interpolate, resolveDescriptor, idPatternMatches } from '../surface/targeting.js';
 import { resolveFrameByPathStrict } from '../surface/targeting.js';
@@ -36,6 +37,32 @@ function writeEvidence(ctx: Ctx, event: Record<string, unknown>): void {
     throw Object.assign(new Error(`evidence write failed: ${error instanceof Error ? error.message : String(error)}`), {
       deftClass: 'EVIDENCE_WRITE_FAILED',
     });
+  }
+}
+
+/** One guarded boundary for every driver-level action. Driver.act returns a
+ * typed ActOutcome; ignoring `ok:false` used to let a failed navigation or
+ * coordinate click continue into post-checks as if it had succeeded. */
+async function performDriverAction(
+  ctx: Ctx,
+  action: AgentAction,
+  stepId: string,
+  execution: { mode: string; attempt: number },
+  expectsDialog = false
+): Promise<void> {
+  const outcome = await ctx.driver.act(action);
+  if (outcome.events.length > 0) {
+    writeEvidence(ctx, { type: 'surface_events', stepId, mode: execution.mode, attempt: execution.attempt, events: outcome.events });
+  }
+  if (!outcome.ok) {
+    throw Object.assign(new Error(outcome.message ?? `driver action failed: ${action.type}`), {
+      deftClass: outcome.errorClass ?? 'ACT_FAILED',
+    });
+  }
+  if (expectsDialog) await ctx.driver.waitForExpectedDialog();
+  const lateEvents = ctx.driver.drainEvents();
+  if (lateEvents.length > 0) {
+    writeEvidence(ctx, { type: 'surface_events', stepId, mode: execution.mode, attempt: execution.attempt, events: lateEvents });
   }
 }
 
@@ -67,7 +94,12 @@ export async function replayCapability(
       status = 'FAILED';
       failure = { stepId: 'entry', phase: 'act', errorClass: 'POLICY_BLOCKED', expected: entryUrl, observed: 'blocked by allowlist', evidenceRefs: [] };
     } else {
-      await ctx.driver.act({ type: 'navigate', url: entryUrl });
+      try {
+        await performDriverAction(ctx, { type: 'navigate', url: entryUrl }, 'entry', { mode: 'normal', attempt: 1 });
+      } catch (err) {
+        status = 'FAILED';
+        failure = { stepId: 'entry', phase: 'act', errorClass: errorClassOf(err), expected: entryUrl, observed: shortMsg(err), evidenceRefs: [] };
+      }
       await shot(ctx, 'entry');
     }
 
@@ -77,7 +109,7 @@ export async function replayCapability(
       // the model never sees them (there is no model here at all).
       let authIndex = 0;
       for (const authStep of artifact.authPhase?.steps ?? []) {
-        const outcome = await runStep(ctx, artifact, opts, authStep, authIndex, { disableRecovery: true });
+        const outcome = await runStep(ctx, artifact, opts, authStep, authIndex, { mode: 'auth' });
         authIndex += 1;
         if (outcome.kind === 'failure') {
           status = 'FAILED';
@@ -213,29 +245,49 @@ type StepOutcome =
   | { kind: 'business'; business: NonNullable<ReplayResult['businessOutcome']> }
   | { kind: 'failure'; failure: NonNullable<ReplayResult['failure']> };
 
+type ExecutionMode = 'normal' | 'auth' | 'recovery' | 'fast-forward' | 'retry';
+type DispatchState = 'not-started' | 'in-flight' | 'completed' | 'postcheck-uncertain';
+type StepExecutionInternal = { mode?: ExecutionMode; attempt?: number; framePath?: string[] };
+const MODE_RULES: Record<ExecutionMode, { mayRecover: boolean; mayApproveRisk: boolean; mayEscalateFailure: boolean }> = {
+  normal: { mayRecover: true, mayApproveRisk: true, mayEscalateFailure: true },
+  auth: { mayRecover: false, mayApproveRisk: false, mayEscalateFailure: false },
+  recovery: { mayRecover: false, mayApproveRisk: false, mayEscalateFailure: false },
+  'fast-forward': { mayRecover: false, mayApproveRisk: false, mayEscalateFailure: false },
+  retry: { mayRecover: false, mayApproveRisk: false, mayEscalateFailure: false },
+};
+
 async function runStep(
   ctx: Ctx,
   artifact: CapabilityArtifact,
   opts: ReplayOptions & { allowRisky?: boolean },
   step: Step,
   stepIndex = 0,
-  internal: { disableRecovery?: boolean } = {}
+  internal: StepExecutionInternal = {}
 ): Promise<StepOutcome> {
   const t0 = Date.now();
-  ctx.evidence.write({ type: 'step_start', stepId: step.id, intent: step.intent, action: step.action });
+  const mode = internal.mode ?? 'normal';
+  const modeRules = MODE_RULES[mode];
+  const attempt = internal.attempt ?? (mode === 'retry' ? 2 : 1);
+  const previousExecution = ctx.execution;
+  let dispatchState: DispatchState = 'not-started';
+  ctx.execution = { mode, attempt };
+  ctx.evidence.write({ type: 'step_start', stepId: step.id, intent: step.intent, action: step.action, mode, attempt });
 
-  if (
+  try {
+    if (
     step.riskClass === 'risky' &&
     !opts.allowRisky &&
-    (artifact.riskPolicy?.onRiskyStep ?? 'require_approval') === 'require_approval'
-  ) {
+    (artifact.riskPolicy?.onRiskyStep ?? 'require_approval') === 'require_approval' &&
+    !ctx.approvedRiskySteps.has(step.id)
+    ) {
     // Human-in-the-loop approval: an operator may authorize the risky step
     // through the escalation channel instead of pre-approving the whole run.
-    if (opts.onEscalation && !internal.disableRecovery && !ctx.recoveryAttempts.has(`risky:${step.id}`)) {
+    if (opts.onEscalation && modeRules.mayApproveRisk && !ctx.recoveryAttempts.has(`risky:${step.id}`)) {
       ctx.recoveryAttempts.set(`risky:${step.id}`, 1);
       const reason = `risky step "${step.intent}" requires operator approval`;
       const approved = await escalateToHuman(ctx, opts, step, reason);
       if (approved) {
+        ctx.approvedRiskySteps.add(step.id);
         ctx.evidence.write({ type: 'risky_approved_by_operator', stepId: step.id });
         // fall through: approval granted for this step
       } else {
@@ -244,47 +296,75 @@ async function runStep(
     } else {
       return fail(ctx, step, 'act', 'RISKY_STEP_BLOCKED', 'approved unattended execution', `risky step requires approval: ${step.intent}`, []);
     }
-  }
-
-  try {
+    }
     switch (step.action) {
       case 'navigate': {
         const url = interpolate(step.valueTemplate ?? '', templateCtx(artifact, opts, ctx));
         if (!ctx.policy.isUrlAllowed(url)) {
           return fail(ctx, step, 'act', 'POLICY_BLOCKED', url, 'outside allowlist', []);
         }
-        await ctx.driver.act({ type: 'navigate', url });
+        if (internal.framePath?.length) {
+          const frame = resolveFrameByPathStrict(ctx.driver.page, internal.framePath);
+          if (!frame) return fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', `frame path [${internal.framePath.join('>')}]`, 'frame missing', []);
+          if (!ctx.policy.isUrlAllowed(frame.url())) return fail(ctx, step, 'act', 'POLICY_BLOCKED', url, `disallowed frame url: ${frame.url()}`, []);
+          dispatchState = 'in-flight';
+          await frame.evaluate((target) => { window.location.href = target; }, url);
+          await ctx.driver.waitForLoadStateSettle();
+          dispatchState = 'completed';
+          if (!ctx.policy.isUrlAllowed(frame.url())) return fail(ctx, step, 'act', 'POLICY_BLOCKED', url, `disallowed frame url after navigation: ${frame.url()}`, []);
+        } else {
+          dispatchState = 'in-flight';
+          await performDriverAction(ctx, { type: 'navigate', url }, step.id, { mode, attempt });
+          dispatchState = 'completed';
+        }
         break;
       }
       case 'click':
       case 'fill':
       case 'select':
       case 'press': {
-        if (step.expectsDialog) ctx.driver.acceptNextDialog();
         if (!step.target) {
           return fail(ctx, step, 'locate', 'ARTIFACT_INVALID', 'target descriptor', 'missing', []);
         }
         const located = await locate(ctx, artifact, opts, step);
         if ('outcome' in located) return located.outcome;
 
-        if (located.mode === 'done') break; // coordinate click already executed
+        if (located.mode === 'coordinate') {
+          if (step.expectsDialog) ctx.driver.acceptNextDialog();
+          try {
+            dispatchState = 'in-flight';
+            await performDriverAction(ctx, { type: 'click', hint: { px: located.px } }, step.id, { mode, attempt }, step.expectsDialog);
+            dispatchState = 'completed';
+          } finally {
+            ctx.driver.disarmNextDialog();
+          }
+          break;
+        }
 
         const loc = located.locator!;
         const c = templateCtx(artifact, opts, ctx);
-        if (step.action === 'click') {
-          await loc.click({ timeout: 12000 });
-        } else if (step.action === 'fill') {
-          await loc.fill(interpolate(step.valueTemplate ?? '', c), { timeout: 10000 });
-        } else if (step.action === 'select') {
-          const label = interpolate(step.selectOptionText ?? '', c);
-          await loc.selectOption({ label }).catch(() => loc.selectOption(label));
-        } else {
-          await loc.press(step.keyCombo ?? 'Enter');
-        }
-        // Direct locator calls bypass driver.act(); settle explicitly so
-        // follow-up steps never race an in-flight frameset navigation.
-        if (step.action !== 'fill' && step.action !== 'select') {
-          await ctx.driver.waitForLoadStateSettle();
+        if (step.expectsDialog) ctx.driver.acceptNextDialog();
+        try {
+          dispatchState = 'in-flight';
+          if (step.action === 'click') {
+            await loc.click({ timeout: 12000 });
+          } else if (step.action === 'fill') {
+            await loc.fill(interpolate(step.valueTemplate ?? '', c), { timeout: 10000 });
+          } else if (step.action === 'select') {
+            const label = interpolate(step.selectOptionText ?? '', c);
+            await loc.selectOption({ label }).catch(() => loc.selectOption(label));
+          } else {
+            await loc.press(step.keyCombo ?? 'Enter');
+          }
+          dispatchState = 'completed';
+          // Direct locator calls bypass driver.act(); settle while the
+          // expected dialog remains armed, then disarm lexically below.
+          if (step.expectsDialog) await ctx.driver.waitForExpectedDialog();
+          if (step.action !== 'fill' && step.action !== 'select') {
+            await ctx.driver.waitForLoadStateSettle();
+          }
+        } finally {
+          ctx.driver.disarmNextDialog();
         }
         // A click that "worked" may still have landed on a session-expiry
         // redirect inside a frame — surface it so recovery can fire.
@@ -301,12 +381,17 @@ async function runStep(
         break;
       }
       case 'scroll':
-        await ctx.driver.act({ type: 'scroll', direction: step.scrollDirection ?? 'down', magnitude: 400 });
+        dispatchState = 'in-flight';
+        await performDriverAction(ctx, { type: 'scroll', direction: step.scrollDirection ?? 'down', magnitude: 400 }, step.id, { mode, attempt });
+        dispatchState = 'completed';
         break;
       case 'wait':
-        await ctx.driver.act({ type: 'wait', ms: 800 });
+        dispatchState = 'in-flight';
+        await performDriverAction(ctx, { type: 'wait', ms: step.waitDurationMs ?? 800 }, step.id, { mode, attempt });
+        dispatchState = 'completed';
         break;
       case 'extract': {
+        dispatchState = 'in-flight';
         const value = await extractStepOutput(ctx, artifact, opts, step);
         ctx.evidence.write({ type: 'extract', stepId: step.id, found: value != null });
         if (value == null) {
@@ -317,13 +402,15 @@ async function runStep(
           return fail(ctx, step, 'verify', 'EXTRACT_FAILED', describeExtract(step), 'not found', [ref]);
         }
         if (step.outputKey) ctx.outputs[step.outputKey] = value;
+        dispatchState = 'completed';
         break;
       }
       case 'check': {
+        dispatchState = 'postcheck-uncertain';
         const ok = await runCheck(ctx, artifact, opts, step.postCheck);
         if (!ok) {
           const ref = await shot(ctx, `fail-check-${step.id}`);
-          return fail(ctx, step, 'verify', 'CHECK_FAILED', describeCheck(step.postCheck), 'failed', [ref]);
+          return fail(ctx, step, 'verify', step.idempotent === false ? 'NON_IDEMPOTENT_OUTCOME_UNKNOWN' : 'CHECK_FAILED', describeCheck(step.postCheck), 'failed after dispatched step', [ref]);
         }
         break;
       }
@@ -336,13 +423,14 @@ async function runStep(
     }
 
     if (step.postCheck && step.action !== 'check') {
+      dispatchState = 'postcheck-uncertain';
       const ok = await runCheck(ctx, artifact, opts, step.postCheck);
       if (!ok) {
         const probe = await pageProbe(ctx);
         const biz = matchBusinessOutcome(artifact, step.id, probe);
         if (biz) return { kind: 'business', business: biz };
         const ref = await shot(ctx, `fail-post-${step.id}`);
-        return fail(ctx, step, 'verify', 'POST_CHECK_FAILED', describeCheck(step.postCheck), summarize(probe), [ref]);
+        return fail(ctx, step, 'verify', step.idempotent === false ? 'NON_IDEMPOTENT_OUTCOME_UNKNOWN' : 'POST_CHECK_FAILED', describeCheck(step.postCheck), summarize(probe), [ref]);
       }
     }
 
@@ -362,11 +450,24 @@ async function runStep(
       frameUrls: ctx.driver.page.frames().map((f) => `${f.name()}=${f.url()}`),
       shot: postShot,
     });
-    ctx.evidence.write({ type: 'step_ok', stepId: step.id, ms: Date.now() - t0 });
+    ctx.evidence.write({ type: 'step_ok', stepId: step.id, ms: Date.now() - t0, mode, attempt });
     return { kind: 'ok' };
   } catch (err) {
+    ctx.driver.disarmNextDialog();
+    if (step.idempotent === false && dispatchState !== 'not-started') {
+      const ref = await shot(ctx, `fail-uncertain-${step.id}`);
+      return fail(ctx, step, classifyPhase(err), 'NON_IDEMPOTENT_OUTCOME_UNKNOWN', 'confirmed completion or explicit operator recovery', shortMsg(err), [ref]);
+    }
     // 1) bounded recovery chain (e.g. session expiry re-login)
-    const recovered = internal.disableRecovery ? null : await attemptRecovery(ctx, artifact, opts, step, err);
+    let recovered: string | null = null;
+    if (modeRules.mayRecover) {
+      try {
+        recovered = await attemptRecovery(ctx, artifact, opts, step, err);
+      } catch (recoveryErr) {
+        const ref = await shot(ctx, `fail-recovery-${step.id}`);
+        return fail(ctx, step, 'recover', 'RECOVERY_FAILED', step.intent, shortMsg(recoveryErr), [ref]);
+      }
+    }
     if (recovered) {
       ctx.timeline.push({
         stepId: step.id,
@@ -378,7 +479,13 @@ async function runStep(
         detail: recovered,
       });
       // Retry the step once after recovery by tail-recursing through loop guard.
-      const retry = await runStepRetry(ctx, artifact, opts, step, stepIndex, t0);
+      const retry = await reconstructAndRetry(ctx, artifact, opts, step, stepIndex);
+      if (retry.kind === 'failure') {
+        // The retry's mode-specific event is an attempt result. Promote its
+        // terminal failure once here so the logical step has exactly one
+        // ordinary step_failed event as well.
+        return fail(ctx, step, retry.failure.phase, retry.failure.errorClass, retry.failure.expected, retry.failure.observed, retry.failure.evidenceRefs);
+      }
       return retry;
     }
     // 2) business outcome detection — an "expected failure" is an answer
@@ -389,17 +496,23 @@ async function runStep(
       return { kind: 'business', business: biz };
     }
     // 3) human-in-the-loop escalation (once per step)
-    if (opts.onEscalation && !internal.disableRecovery && !ctx.recoveryAttempts.has(`esc:${step.id}`)) {
+    if (opts.onEscalation && modeRules.mayEscalateFailure && !ctx.recoveryAttempts.has(`esc:${step.id}`)) {
       ctx.recoveryAttempts.set(`esc:${step.id}`, 1);
       const reason = `replay stuck at step ${step.id} ("${step.intent}"): ${shortMsg(err)}`;
       const resumed = await escalateToHuman(ctx, opts, step, reason);
       if (resumed) {
-        return runStepRetry(ctx, artifact, opts, step, stepIndex, t0);
+        const retry = await reconstructAndRetry(ctx, artifact, opts, step, stepIndex);
+        if (retry.kind === 'failure') {
+          return fail(ctx, step, retry.failure.phase, retry.failure.errorClass, retry.failure.expected, retry.failure.observed, retry.failure.evidenceRefs);
+        }
+        return retry;
       }
     }
     // 4) hard failure
     const ref = await shot(ctx, `fail-${step.id}`);
     return fail(ctx, step, classifyPhase(err), errorClassOf(err), step.intent, shortMsg(err), [ref]);
+  } finally {
+    ctx.execution = previousExecution;
   }
 }
 
@@ -410,13 +523,12 @@ async function runStep(
  * ("Cannot GET /results.aspx" taught us this). Then retries the failed step
  * through the SAME guarded executor.
  */
-async function runStepRetry(
+async function reconstructAndRetry(
   ctx: Ctx,
   artifact: CapabilityArtifact,
   opts: ReplayOptions & { allowRisky?: boolean },
   step: Step,
-  stepIndex: number,
-  t0: number
+  stepIndex: number
 ): Promise<StepOutcome> {
   try {
     // Fast-forward: rebuild deterministic state by RE-RUNNING the verified
@@ -425,99 +537,32 @@ async function runStepRetry(
     // already happened must not happen twice; crossing one means escalate.
     for (let j = 0; j < stepIndex; j++) {
       const prev = artifact.steps[j]!;
-      if (prev.pageUrl && /login\.aspx/i.test(prev.pageUrl)) continue; // chain re-authenticated
-      if (['extract', 'check', 'wait', 'scroll'].includes(prev.action)) continue;
       if (prev.idempotent === false) {
         ctx.evidence.write({ type: 'fast_forward_blocked_non_idempotent', stepId: prev.id });
         const ref = await shot(ctx, `fail-ff-${step.id}`);
-        return fail(ctx, step, 'act', 'FAST_FORWARD_BLOCKED', 'idempotent state reconstruction', `non-idempotent step ${prev.id} lies between recovery and the failed step — refusing to duplicate a side effect`, [ref]);
+        return fail(ctx, step, 'act', 'FAST_FORWARD_BLOCKED', 'idempotent state reconstruction', `non-idempotent step ${prev.id} lies between recovery and the failed step — refusing to duplicate a side effect`, [ref], { mode: 'fast-forward', attempt: 1 });
       }
-      const ff = await runStep(ctx, artifact, { ...opts, onEscalation: undefined }, prev, j, { disableRecovery: true });
-      if (ff.kind === 'failure') {
-        // Benign: the flow already moved past this step (its control is gone
-        // because we're on a later page) → skip. Anything else (policy,
-        // ambiguous target, session dead…) is NOT benign → fail honestly
-        // instead of "hoping the next step works".
-        const benign = ff.failure?.errorClass === 'ELEMENT_NOT_FOUND' || ff.failure?.errorClass === 'TIMEOUT';
-        ctx.evidence.write({ type: 'fast_forward_skip', stepId: prev.id, reason: ff.failure?.errorClass, benign });
-        if (!benign) {
-          const ref = await shot(ctx, `fail-ff-${step.id}`);
-          return fail(ctx, step, 'act', 'FAST_FORWARD_FAILED', `reconstruction via ${prev.id}`, ff.failure?.observed ?? 'fast-forward step failed', [ref]);
-        }
+      const ff = await runStep(ctx, artifact, { ...opts, onEscalation: undefined }, prev, j, { mode: 'fast-forward', attempt: 1 });
+      if (ff.kind !== 'ok') {
+        const ref = await shot(ctx, `fail-ff-${step.id}`);
+        return fail(ctx, step, 'act', 'FAST_FORWARD_FAILED', `reconstruction via ${prev.id}`, ff.kind === 'failure' ? ff.failure?.observed ?? 'fast-forward step failed' : `business outcome ${ff.business.code} during fast-forward`, [ref], { mode: 'fast-forward', attempt: 1 });
       }
     }
-    const outcome = await executeStepBody(ctx, artifact, opts, step);
-    if (outcome !== null) return outcome;
-    ctx.timeline.push({
-      stepId: step.id,
-      intent: step.intent,
-      phase: 'act',
-      ok: true,
-      ms: Date.now() - t0,
-      recovered: true,
-      degraded: ctx.degradedSteps.includes(step.id) || undefined,
-    });
-    ctx.evidence.write({ type: 'step_ok_after_recovery', stepId: step.id });
-    return { kind: 'ok' };
+    const outcome = await runStep(ctx, artifact, opts, step, stepIndex, { mode: 'retry', attempt: 2 });
+    if (outcome.kind === 'ok') ctx.evidence.write({ type: 'step_ok_after_recovery', stepId: step.id, mode: 'retry', attempt: 2 });
+    return outcome;
   } catch (err) {
     const probe = await pageProbe(ctx);
     const biz = matchBusinessOutcome(artifact, step.id, probe);
     if (biz) return { kind: 'business', business: biz };
     const ref = await shot(ctx, `fail-retry-${step.id}`);
-    return fail(ctx, step, classifyPhase(err), errorClassOf(err), step.intent, shortMsg(err), [ref]);
-  }
-}
-
-/** Executes only the action part of a step; returns null when nothing failed. */
-async function executeStepBody(
-  ctx: Ctx,
-  artifact: CapabilityArtifact,
-  opts: ReplayOptions & { allowRisky?: boolean },
-  step: Step
-): Promise<StepOutcome | null> {
-  switch (step.action) {
-    case 'navigate': {
-      const url = interpolate(step.valueTemplate ?? '', templateCtx(artifact, opts, ctx));
-      await ctx.driver.act({ type: 'navigate', url });
-      return null;
-    }
-    case 'click':
-    case 'fill':
-    case 'select':
-    case 'press': {
-      if (!step.target) throw new Error('missing target');
-      const located = await locate(ctx, artifact, opts, step);
-      if ('outcome' in located) return located.outcome;
-      if (located.mode === 'done') return null;
-      const loc = located.locator!;
-      const c = templateCtx(artifact, opts, ctx);
-      if (step.action === 'click') await loc.click({ timeout: 12000 });
-      else if (step.action === 'fill') await loc.fill(interpolate(step.valueTemplate ?? '', c), { timeout: 10000 });
-      else if (step.action === 'select') {
-        const label = interpolate(step.selectOptionText ?? '', c);
-        await loc.selectOption({ label }).catch(() => loc.selectOption(label));
-      } else await loc.press(step.keyCombo ?? 'Enter');
-      // Same settle discipline as the main path — post-recovery retries race
-      // frame navigations exactly like first attempts do.
-      if (step.action !== 'fill' && step.action !== 'select') {
-        await ctx.driver.waitForLoadStateSettle();
-      }
-      return null;
-    }
-    case 'extract': {
-      const value = await extractStepOutput(ctx, artifact, opts, step);
-      if (value == null) throw new Error(`extract failed: ${describeExtract(step)}`);
-      if (step.outputKey) ctx.outputs[step.outputKey] = value;
-      return null;
-    }
-    default:
-      return null; // scroll/wait/check need no retry semantics here
+    return fail(ctx, step, classifyPhase(err), errorClassOf(err), step.intent, shortMsg(err), [ref], { mode: 'retry', attempt: 2 });
   }
 }
 
 type LocateOutcome =
   | { mode: 'locator'; locator: Locator }
-  | { mode: 'done' } // coordinate fallback already clicked
+  | { mode: 'coordinate'; px: { x: number; y: number } }
   | { outcome: StepOutcome };
 
 async function locate(
@@ -610,8 +655,7 @@ async function locate(
       }
       if (!px) px = gridToPxViewport(spec.x, spec.y);
       ctx.evidence.write({ type: 'coordinate_click_viewport', stepId: step.id, px });
-      await ctx.driver.act({ type: 'click', hint: { px } });
-      return { mode: 'done' };
+      return { mode: 'coordinate', px };
     }
   }
   const ref = await shot(ctx, `fail-locate-${step.id}`);
@@ -706,71 +750,34 @@ async function runRecoveryActions(
   step: Step,
   actions: Array<import('../core/artifact.js').RecoverAction>
 ): Promise<void> {
-  const c = templateCtx(artifact, opts, ctx);
   let n = 0;
   for (const act of actions) {
     n += 1;
     const pseudoId = `${step.id}-rec${n}`;
-    if (act.action === 'navigate') {
-      const url = interpolate(act.urlTemplate, c);
-      if (!ctx.policy.isUrlAllowed(url)) {
-        throw new Error(`POLICY_BLOCKED: recovery navigate outside allowlist: ${url}`);
-      }
-      await ctx.driver.act({ type: 'navigate', url });
-      await ctx.driver.waitForLoadStateSettle();
-    } else if (act.action === 'wait') {
-      await ctx.driver.act({ type: 'wait', ms: Math.min(act.durationMs, 5000) });
-    } else if (act.action === 'gotoStepPage') {
-      const url = interpolate(step.pageUrl ?? '', c);
-      ctx.evidence.write({ type: 'goto_step_page', stepId: step.id, url, framePath: step.target?.scope.framePath ?? [] });
-      if (!url) continue;
-      const fp = step.target?.scope.framePath ?? [];
-      if (fp.length > 0) {
-        // Return the FRAME to the step's page (frameset apps keep the shell).
-        // The frameset children attach ASYNC after the relogin POST — poll.
-        let target: import('playwright').Frame | undefined;
-        for (let i = 0; i < 40 && !target; i++) {
-          const parent = resolveFrameByPathPublic(ctx.driver.page, fp.slice(0, -1));
-          const leaf = fp[fp.length - 1]!;
-          target = parent?.childFrames().find((f) => f.name() === leaf || f.url() === leaf);
-          if (!target) await new Promise((r) => setTimeout(r, 150));
-        }
-        if (target) {
-          await target.evaluate(`window.location.href = ${JSON.stringify(url)}`).catch((e) => {
-            ctx.evidence.write({ type: 'goto_step_page_error', stepId: step.id, message: (e as Error).message?.slice(0, 150) });
-          });
-          await ctx.driver.waitForLoadStateSettle();
-          ctx.evidence.write({
-            type: 'goto_step_page_done',
-            stepId: step.id,
-            frameUrl: target.url(),
-          });
-          continue;
-        }
-        ctx.evidence.write({ type: 'goto_step_page_error', stepId: step.id, message: 'target frame not found after poll' });
-      }
-      await ctx.driver.act({ type: 'navigate', url });
-    } else {
-      // fill / click / select — guarded pseudo-step through runStep.
-      const pseudoStep: Step = {
-        id: pseudoId,
-        intent: `recovery ${act.action} for ${step.id}`,
-        action: act.action === 'fill' ? 'fill' : act.action === 'click' ? 'click' : 'select',
-        target: act.target,
-        valueTemplate: act.action === 'fill' ? act.valueTemplate : undefined,
-        selectOptionText: act.action === 'select' ? act.optionTextTemplate : undefined,
-        pageUrl: step.pageUrl,
-        recoverableErrors: [],
-        riskClass: 'safe',
-        idempotent: true,
-        expectsDialog: false,
-      };
-      const outcome = await runStep(ctx, artifact, { ...opts, onEscalation: undefined }, pseudoStep, 0, {
-        disableRecovery: true,
-      });
-      if (outcome.kind === 'failure') {
-        throw new Error(`recovery ${act.action} failed: ${outcome.failure.errorClass}`);
-      }
+    // Recovery inherits the failed step's safety metadata.  Recovery is not
+    // an escape hatch for turning an unknown side effect into a safe one.
+    // Frame semantics for gotoStepPage are carried separately below.
+    const pseudoStep: Step = {
+      id: pseudoId,
+      intent: `recovery ${act.action} for ${step.id}`,
+      action: act.action === 'navigate' || act.action === 'gotoStepPage' ? 'navigate' : act.action === 'wait' ? 'wait' : act.action === 'fill' ? 'fill' : act.action === 'click' ? 'click' : 'select',
+      target: 'target' in act ? act.target : undefined,
+      valueTemplate: act.action === 'navigate' ? act.urlTemplate : act.action === 'gotoStepPage' ? step.pageUrl : act.action === 'fill' ? act.valueTemplate : undefined,
+      selectOptionText: act.action === 'select' ? act.optionTextTemplate : undefined,
+      waitDurationMs: act.action === 'wait' ? act.durationMs : undefined,
+      pageUrl: step.pageUrl,
+      recoverableErrors: [],
+      riskClass: act.riskClass,
+      idempotent: act.idempotent,
+      expectsDialog: act.expectsDialog,
+    };
+    if (act.action === 'gotoStepPage' && !step.pageUrl) continue;
+    const outcome = await runStep(ctx, artifact, { ...opts, onEscalation: undefined }, pseudoStep, 0, {
+      mode: 'recovery',
+      framePath: act.action === 'gotoStepPage' ? step.target?.scope.framePath : undefined,
+    });
+    if (outcome.kind === 'failure') {
+      throw new Error(`recovery ${act.action} failed: ${outcome.failure.errorClass}`);
     }
   }
 }
@@ -881,9 +888,12 @@ function fail(
   errorClass: string,
   expected: string,
   observed: string,
-  extraRefs: string[]
+  extraRefs: string[],
+  execution?: { mode: string; attempt: number }
 ): { kind: 'failure'; failure: NonNullable<ReplayResult['failure']> } {
-  ctx.evidence.write({ type: 'step_failed', stepId: step.id, errorClass, expected, observed, evidenceRefs: extraRefs });
+  const mode = execution?.mode ?? ctx.execution?.mode ?? 'normal';
+  const attempt = execution?.attempt ?? ctx.execution?.attempt ?? 1;
+  ctx.evidence.write({ type: mode === 'normal' || mode === 'auth' ? 'step_failed' : 'step_attempt_failed', stepId: step.id, errorClass, expected, observed, evidenceRefs: extraRefs, mode, attempt });
   return {
     kind: 'failure',
     failure: {

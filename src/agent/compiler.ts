@@ -216,13 +216,13 @@ export function compileCapability(
     businessOutcomes: opts.businessOutcomes ?? [],
     recoveryChains: {
       relogin: [
-        { action: 'navigate', urlTemplate: opts.entryUrlTemplate },
+        { action: 'navigate', urlTemplate: opts.entryUrlTemplate, riskClass: 'safe', idempotent: true, expectsDialog: false },
         // Prefer authPhase descriptors (engine-side, always present when auth
         // is deterministic) over legacy loginTargets from the transcript.
         ...(opts.loginTargets?.userField
           ? credentialChain(opts)
           : authPhaseChain(result)),
-        { action: 'wait', durationMs: 800 },
+        { action: 'wait', durationMs: 800, riskClass: 'safe', idempotent: true, expectsDialog: false },
       ],
     },
     successCondition: {
@@ -283,28 +283,28 @@ export function compileCapability(
 
 /** Recovery chain credential actions from the authPhase's verified descriptors. */
 function authPhaseChain(result: DiscoveryResult): Array<
-  | { action: 'fill'; target: TargetDescriptor; valueTemplate: string }
-  | { action: 'click'; target: TargetDescriptor }
+  | { action: 'fill'; target: TargetDescriptor; valueTemplate: string; riskClass: 'safe'; idempotent: true; expectsDialog: false }
+  | { action: 'click'; target: TargetDescriptor; riskClass: 'safe'; idempotent: true; expectsDialog: false }
 > {
   const steps = result.authSteps ?? [];
-  const out: Array<{ action: 'fill'; target: TargetDescriptor; valueTemplate: string } | { action: 'click'; target: TargetDescriptor }> = [];
+  const out: Array<{ action: 'fill'; target: TargetDescriptor; valueTemplate: string; riskClass: 'safe'; idempotent: true; expectsDialog: false } | { action: 'click'; target: TargetDescriptor; riskClass: 'safe'; idempotent: true; expectsDialog: false }> = [];
   for (const s of steps) {
     if (!s.descriptor) continue;
     if (s.action.type === 'type') {
       const isPass = /pass/i.test(`${s.facts?.typeAttr ?? ''} ${s.facts?.id ?? ''}`);
-      out.push({ action: 'fill', target: s.descriptor, valueTemplate: isPass ? '{{env.password}}' : '{{env.username}}' });
+      out.push({ action: 'fill', target: s.descriptor, valueTemplate: isPass ? '{{env.password}}' : '{{env.username}}', riskClass: 'safe', idempotent: true, expectsDialog: false });
     } else if (s.action.type === 'click') {
-      out.push({ action: 'click', target: s.descriptor });
+      out.push({ action: 'click', target: s.descriptor, riskClass: 'safe', idempotent: true, expectsDialog: false });
     }
   }
   return out;
 }
 
 function credentialChain(opts: CompileOptions): Array<
-  | { action: 'navigate'; urlTemplate: string }
-  | { action: 'fill'; target: NonNullable<Step['target']>; valueTemplate: string }
-  | { action: 'click'; target: NonNullable<Step['target']> }
-  | { action: 'wait'; durationMs: number }
+  | { action: 'navigate'; urlTemplate: string; riskClass: 'safe'; idempotent: true; expectsDialog: false }
+  | { action: 'fill'; target: NonNullable<Step['target']>; valueTemplate: string; riskClass: 'safe'; idempotent: true; expectsDialog: false }
+  | { action: 'click'; target: NonNullable<Step['target']>; riskClass: 'safe'; idempotent: true; expectsDialog: false }
+  | { action: 'wait'; durationMs: number; riskClass: 'safe'; idempotent: true; expectsDialog: false }
 > {
   const lt = opts.loginTargets ?? {};
   const dummy: TargetDescriptor = {
@@ -319,17 +319,20 @@ function credentialChain(opts: CompileOptions): Array<
       action: 'fill' as const,
       valueTemplate: '{{env.username}}',
       target: (lt.userField ?? dummy) as NonNullable<Step['target']>,
+      riskClass: 'safe', idempotent: true, expectsDialog: false,
     },
     {
       action: 'fill' as const,
       valueTemplate: '{{env.password}}',
       target: (lt.passField ?? lt.userField ?? dummy) as NonNullable<Step['target']>,
+      riskClass: 'safe', idempotent: true, expectsDialog: false,
     },
     {
       action: 'click' as const,
       target: (lt.submitButton ??
         lt.passField ??
         dummy) as NonNullable<Step['target']>,
+      riskClass: 'safe', idempotent: true, expectsDialog: false,
     },
   ];
 }

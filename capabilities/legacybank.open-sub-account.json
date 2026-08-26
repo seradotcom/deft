@@ -757,7 +757,10 @@
     "relogin": [
       {
         "action": "navigate",
-        "urlTemplate": "http://localhost:7788/acme/login.aspx"
+        "urlTemplate": "http://localhost:7788/acme/login.aspx",
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
         "action": "fill",
@@ -794,7 +797,10 @@
           "quality": "verified",
           "rationale": "2 semantic locator(s) verified against the live element at record time"
         },
-        "valueTemplate": "{{env.username}}"
+        "valueTemplate": "{{env.username}}",
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
         "action": "fill",
@@ -831,7 +837,10 @@
           "quality": "verified",
           "rationale": "2 semantic locator(s) verified against the live element at record time"
         },
-        "valueTemplate": "{{env.password}}"
+        "valueTemplate": "{{env.password}}",
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
         "action": "click",
@@ -867,14 +876,23 @@
           },
           "quality": "verified",
           "rationale": "2 semantic locator(s) verified against the live element at record time"
-        }
+        },
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
-        "action": "gotoStepPage"
+        "action": "gotoStepPage",
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       },
       {
         "action": "wait",
-        "durationMs": 800
+        "durationMs": 800,
+        "riskClass": "safe",
+        "idempotent": true,
+        "expectsDialog": false
       }
     ]
   },

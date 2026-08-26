@@ -119,13 +119,13 @@ export type EnvBinding = z.infer<typeof EnvBinding>;
  * evidence. Actions form a short chain (e.g. session-expired → re-login).
  */
 export const RecoverAction = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('navigate'), urlTemplate: z.string().min(1) }).strict(),
-  z.object({ action: z.literal('click'), target: TargetDescriptor }).strict(),
-  z.object({ action: z.literal('fill'), target: TargetDescriptor, valueTemplate: z.string().min(1) }).strict(),
-  z.object({ action: z.literal('select'), target: TargetDescriptor, optionTextTemplate: z.string().min(1) }).strict(),
-  z.object({ action: z.literal('wait'), durationMs: z.number().int().positive().max(30000) }).strict(),
+  z.object({ action: z.literal('navigate'), urlTemplate: z.string().min(1), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
+  z.object({ action: z.literal('click'), target: TargetDescriptor, riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
+  z.object({ action: z.literal('fill'), target: TargetDescriptor, valueTemplate: z.string().min(1), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
+  z.object({ action: z.literal('select'), target: TargetDescriptor, optionTextTemplate: z.string().min(1), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
+  z.object({ action: z.literal('wait'), durationMs: z.number().int().positive().max(30000), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
   /** Navigate the failed step's frame (or top) back to step.pageUrl. */
-  z.object({ action: z.literal('gotoStepPage') }).strict(),
+  z.object({ action: z.literal('gotoStepPage'), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
 ]);
 export type RecoverAction = z.infer<typeof RecoverAction>;
 
@@ -207,6 +207,8 @@ export const Step = z.object({
   pageUrl: z.string().optional(),
   selectOptionText: z.string().optional(),
   keyCombo: z.string().optional(),
+  /** Explicit wait duration used by guarded recovery wait actions. */
+  waitDurationMs: z.number().int().positive().max(30000).optional(),
   scrollDirection: z.enum(['up', 'down']).optional(),
   postCheck: Check.optional(),
   /**

@@ -160,7 +160,7 @@ describe('deterministic replay (integration)', () => {
     expect(fs.existsSync(runsDir)).toBe(false);
   });
 
-  it('returns one final FAILED result when a declared output is missing', async () => {
+  it('T3-GUARD: returns one final FAILED result when a declared output is missing', async () => {
     const { artifact } = loadArtifactBytes();
     const missingOutput = JSON.parse(JSON.stringify(artifact)) as Record<string, unknown>;
     missingOutput.steps = (missingOutput.steps as Array<Record<string, unknown>>).filter(
@@ -223,7 +223,7 @@ describe('deterministic replay (integration)', () => {
     expect((log.match(/"type":"replay_result"/g) ?? []).length).toBe(1);
   });
 
-  it('policy: an interactive action on a frame outside the allowlist is blocked BEFORE touching it', async () => {
+  it('T3-POL/GUARD: an interactive action on a frame outside the allowlist is blocked BEFORE touching it', async () => {
     // Trusted origin serves a page embedding an iframe from a SECOND
     // (disallowed) origin that hosts the button. The artifact step targets
     // that frame. Replay must stop with POLICY_BLOCKED and zero interaction.
@@ -319,7 +319,7 @@ describe('deterministic replay (integration)', () => {
     trustedServer.close();
   });
 
-  it('session recovery: mid-flow expiry → relogin chain + fast-forward → SUCCESS', async () => {
+  it('T3-REC: mid-flow expiry → relogin chain + guarded retry → SUCCESS', async () => {
     // Use M10087 — prior tests contaminate M10041 with sub-accounts, and the
     // ambiguity rejection correctly refuses a non-unique Savings row match.
     await fetch(`${baseUrl}/acme/admin/reset`, { method: 'POST' });
@@ -342,6 +342,9 @@ describe('deterministic replay (integration)', () => {
     const log = fs.readFileSync(path.join(RUNS_DIR, result.runId, 'log.jsonl'), 'utf8');
     expect(log).toContain('"type":"recovering"');
     expect(log).toContain('step_ok_after_recovery');
+    expect(log).toContain('"mode":"recovery"');
+    expect(log).toContain('"mode":"retry"');
+    expect((log.match(/"type":"step_failed"/g) ?? []).length).toBe(0);
   }, 120_000);
 });
 

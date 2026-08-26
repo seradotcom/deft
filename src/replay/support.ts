@@ -53,6 +53,8 @@ export interface Ctx {
   outputs: Record<string, unknown>;
   recoveryAttempts: Map<string, number>;
   lastShots: string[];
+  execution?: { mode: 'normal' | 'auth' | 'recovery' | 'fast-forward' | 'retry'; attempt: number };
+  approvedRiskySteps: Set<string>;
   escalation?: {
     interventionId: string;
     reason: string;
@@ -87,6 +89,7 @@ export async function openRunContext(
     outputs: {},
     recoveryAttempts: new Map(),
     lastShots: [],
+    approvedRiskySteps: new Set(),
   };
 }
 

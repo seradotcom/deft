@@ -27,6 +27,21 @@ The baseline verifier result is a known false positive. Independent audits confi
 
 The worktree remained free of generated validation ledgers, legacy temporary test directories, and Chromium `debug.log` after the final run.
 
+## Guarded executor hardening — 2026-08-25
+
+- Removed the reduced retry executor; normal, auth, recovery, fast-forward, and retry modes now converge on the guarded `runStep` pipeline.
+- Driver action failures are typed terminal failures; non-idempotent uncertain outcomes fail closed without retrying the side effect.
+- Recovery and retry evidence distinguishes nested `step_attempt_failed` events from exactly one logical `step_failed` event.
+- Expected native dialogs are scoped to the triggering action, awaited with a bound, and always disarmed.
+- Fast-forward no longer skips missing or login-like main-flow steps and never crosses a non-idempotent step.
+- `tests/executor-safety.integration.test.ts`: PASS — 13 adversarial tests.
+- `tests/safety.test.ts` + `tests/replay.integration.test.ts`: PASS — 34 tests.
+- Full `npm test`: PASS — 4 files, 49 tests on the final Task 3 state, 162.47 seconds.
+- `npm run typecheck`: PASS.
+- `git diff --check`: PASS.
+- Delegated human release gate: GO for Task 3.
+- Independent static code review: GO for Task 3.
+
 ## Release gate
 
 Pending. This section will be completed only after code freeze, artifact freeze, evidence regeneration, manifest generation, strict verification, fresh-clone verification, and GitHub CI for the exact final commit.

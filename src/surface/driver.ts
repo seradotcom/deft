@@ -36,6 +36,10 @@ export interface SurfaceDriver {
   drainEvents(): SurfaceEvent[];
   /** One-shot: accept the next native dialog (for steps that expect one). */
   acceptNextDialog(): void;
+  /** Clear an armed expectation when its action did not consume a dialog. */
+  disarmNextDialog(): void;
+  /** Wait for the currently armed expected dialog to be consumed, bounded. */
+  waitForExpectedDialog(timeoutMs?: number): Promise<boolean>;
   // Recorder/compiler helpers:
   factsAtGridPoint(x999: number, y999: number): Promise<ElementFacts | null>;
   /** Facts for an [eN] ref from the latest observation (for verified recording). */
@@ -118,6 +122,10 @@ export class PlaywrightWebDriver implements SurfaceDriver {
         else await d.dismiss();
       } catch {
         /* auto-dismissed races */
+      } finally {
+        const waiter = this.expectedDialogWaiter;
+        this.expectedDialogWaiter = null;
+        waiter?.resolve(accepted);
       }
     });
     p.on('crash', () => {
@@ -126,10 +134,33 @@ export class PlaywrightWebDriver implements SurfaceDriver {
   }
 
   private _acceptNextDialog = false;
+  private expectedDialogWaiter: { promise: Promise<boolean>; resolve: (consumed: boolean) => void } | null = null;
   /** One-shot: the next native dialog will be ACCEPTED instead of dismissed.
    *  Called by the engine when the artifact's step declares expectsDialog. */
   acceptNextDialog(): void {
     this._acceptNextDialog = true;
+    if (!this.expectedDialogWaiter) {
+      let resolve!: (consumed: boolean) => void;
+      const promise = new Promise<boolean>((r) => { resolve = r; });
+      this.expectedDialogWaiter = { promise, resolve };
+    }
+  }
+
+  disarmNextDialog(): void {
+    this._acceptNextDialog = false;
+    const waiter = this.expectedDialogWaiter;
+    this.expectedDialogWaiter = null;
+    waiter?.resolve(false);
+  }
+
+  async waitForExpectedDialog(timeoutMs = 1000): Promise<boolean> {
+    const waiter = this.expectedDialogWaiter;
+    if (!waiter) return false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
+      waiter.promise,
+      new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); }),
+    ]).finally(() => { if (timer) clearTimeout(timer); });
   }
 
   async close(): Promise<void> {

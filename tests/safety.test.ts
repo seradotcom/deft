@@ -160,6 +160,15 @@ describe('release-candidate contract preflight', () => {
     }).success).toBe(false);
   });
 
+  it('requires explicit recovery action safety metadata', () => {
+    const base = JSON.parse(fs.readFileSync(path.join('capabilities', 'legacybank.lookup-member-balance.json'), 'utf8')) as Record<string, any>;
+    const recoveryAction = { action: 'wait', durationMs: 1 };
+    expect(CapabilityArtifactSchema.safeParse({
+      ...base,
+      recoveryChains: { relogin: [recoveryAction] },
+    }).success).toBe(false);
+  });
+
   it('permits a later output reference only after a real extract step', () => {
     const base = JSON.parse(fs.readFileSync(path.join('capabilities', 'legacybank.lookup-member-balance.json'), 'utf8')) as Record<string, any>;
     const afterExtract = { ...base.steps[0], id: 's-after', valueTemplate: '{{outputs.savingsBalance}}' };

@@ -3,7 +3,7 @@
  *
  * Chaos controller (deterministic fault injection for evidence runs):
  *   POST /:tenant/admin/chaos  { "slowNext" | "interstitialNext" | "expireNow": true, modalOnPath?: "/exact/path" }
- *   POST /:tenant/admin/chaos-all  { "expireNow": true } | { "expireOnPath": "/path" }
+ *   POST /:tenant/admin/chaos-all  { "expireNow": true } | { "expireOnPath" | "modalOnPath": "/exact/path" }
  * The REPLAY ENGINE never calls these — the demo harness does, to simulate
  * legitimate runtime conditions of a real institution's app.
  */
@@ -52,6 +52,7 @@ const SLOW_MS = Number(process.env.LEGACYBANK_SLOW_MS ?? 4000);
 export function createLegacyBankApp(): express.Express {
   const members: Member[] = createMembers();
   let expireOnPath: string | undefined;
+  let modalOnPath: string | undefined;
   const findMember = (id: string): Member | undefined =>
     members.find((m) => m.id.toUpperCase() === id.trim().toUpperCase());
   const app = express();
@@ -128,9 +129,12 @@ export function createLegacyBankApp(): express.Express {
       // it blocks interaction underneath and forces a real human decision.
       let finalBody = body;
       const s = (req as express.Request & { session?: Session }).session;
-      if (s?.chaos.modalNext || (s?.chaos.modalOnPath && req.path === s.chaos.modalOnPath)) {
-        s.chaos.modalNext = false;
-        s.chaos.modalOnPath = undefined;
+      if (s?.chaos.modalNext || (s?.chaos.modalOnPath && req.path === s.chaos.modalOnPath) || modalOnPath === req.path) {
+        if (s) {
+          s.chaos.modalNext = false;
+          s.chaos.modalOnPath = undefined;
+        }
+        modalOnPath = undefined;
         const overlay = [
           '<div id="unexpected-overlay" style="position:fixed;inset:0;background:rgba(20,20,20,.55);z-index:9999">',
           '<div style="position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);background:#fff;border:2px solid #444;padding:18px;font-family:Tahoma">',
@@ -376,6 +380,7 @@ export function createLegacyBankApp(): express.Express {
     members.push(...createMembers());
     sessions.clear();
     expireOnPath = undefined;
+    modalOnPath = undefined;
     res.json({ ok: true, reset: true });
   });
 
@@ -389,7 +394,8 @@ export function createLegacyBankApp(): express.Express {
       }
     }
     if (typeof body.expireOnPath === 'string') expireOnPath = body.expireOnPath;
-    res.json({ ok: true, sessionsMarked: n, expireOnPath });
+    if (typeof body.modalOnPath === 'string' && body.modalOnPath.startsWith('/')) modalOnPath = body.modalOnPath;
+    res.json({ ok: true, sessionsMarked: n, expireOnPath, modalOnPath });
   });
 
   app.post('/:tenant/admin/chaos', (req, res) => {

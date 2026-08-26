@@ -153,8 +153,8 @@ describe('LegacyBank modalOnPath fault injection', () => {
   });
 
   it('adds the overlay only to the exact configured confirm path', async () => {
-    const chaos = await fetch(`${baseUrl}/acme/admin/chaos`, {
-      method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ modalOnPath: '/acme/confirmopen.aspx' }),
+    const chaos = await fetch(`${baseUrl}/acme/admin/chaos-all`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ modalOnPath: '/acme/confirmopen.aspx' }),
     });
     expect(chaos.status).toBe(200);
 

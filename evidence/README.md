@@ -1,26 +1,33 @@
-# Evidence
+# Release evidence
 
-Curated bundles from real runs, tied together by [`manifest.json`](manifest.json):
-every scenario records its `runId`, the **sha256 of the exact artifact bytes it
-executed**, its expected vs actual result, and its file list.
-Run `npm run verify:submission` to check all of it automatically.
+This directory is a curated, immutable package of eight scenarios. Run
+`npm run verify:submission` to recompute the frozen capability hashes, every
+scenario file hash and size, terminal events, executed artifact snapshots,
+ledger rows, run IDs, and the HITL audit contracts.
 
-Every `log.jsonl` is the raw structured log (redacted at the sink — registered
-secrets never appear). Screenshots are captured before/after actions, on every
-failure, and — during human escalation — periodically while the operator holds
-the session (`human_sample` events).
+The executable artifacts are the exact LF-normalized files in `capabilities/`,
+both at version `2.0.0`. Each replay bundle contains the exact bytes executed as
+`artifact.executed.json`; variant replay identity is computed after applying
+the declared overlay.
 
-| Bundle | What it proves |
+| Bundle | Contract proved |
 |---|---|
-| `discovery/` | A genuine LLM-driven run (`gemini-3.5-flash`) completing "look up member M10041 and read savings balance" on the live UI: decisions, verified-targeting events, action results, and the full `transcript.json` (terminal state `DONE`). The compiled artifact's `provenance.discoveredFromRunId` points at exactly this run. |
-| `artifact.lookup-member-balance.json` | The compiled capability — typed inputs/outputs, verified targeting descriptors, relational extraction, declared business outcome, shared relogin recovery chain, NW tenant variant. Operator-curated after discovery (duplicates consolidated; checkpoint strengthened) — curation is a documented workflow step, and the provenance run id is preserved. |
-| `replay-success/` | Deterministic replay of that artifact (`memberId=M10041`) — **no model in the loop** — `SUCCESS`, `{"savingsBalance": "$2,450.75"}`, zero degraded steps, `artifactSha256` recorded. Checkpoints assert the member-detail page for the requested member, not just "a click worked". |
-| `artifact.open-sub-account.json` | Operator-authored capability (no LLM): descriptors captured live with the same record-time verified probing. Multi-field form → review → irreversible confirm behind a native `window.confirm`. |
-| `replay-business-outcome/` | Replay with `memberId=M99999` → `BUSINESS_OUTCOME / MEMBER_NOT_FOUND`. "No such member" is an answer for the caller, not a crash. |
-| `replay-session-recovery/` | Session force-expired mid-flow → the login redirect is detected inside the frame → the bounded `relogin` chain re-authenticates → the engine **fast-forwards the deterministic flow** (re-runs the verified steps) to rebuild POST-arrival page state → retried step and the rest of the flow complete: **SUCCESS** with the correct balance. |
-| `replay-cross-tenant/` | The ACME-recorded capability replayed against **NorthWind** (different branding, labels, vendor version 2.4) via a declarative variant overlay — patches cover both locator names *and* recorded fingerprints — SUCCESS, same balance. |
-| `risky-gating/` | The open-sub-account replay without approval: every step runs until the irreversible confirm → `RISKY_STEP_BLOCKED`, and the log proves the confirm never executed. |
-| `hitl-approval/` | Same replay with `--escalate --headed`: the operator console (see `operator-console.png`) shows the REAL live observation; the operator takes control, approves, resumes → `risky_approved_by_operator`, `SUCCESS`, `resumedByHuman: true`, and 5 periodic `human_sample` audit entries captured while the human held the lease. The native confirm dialog is recorded in `surface_events`. |
+| `discovery/` | Original genuine LLM discovery source: one discovery `run_start`, terminal `DONE` transcript/run log, screenshots, and the run ID preserved by the lookup artifact's provenance. This historical source predates the 2.0.0 hardening; it is not represented as a 2.0.0 replay. |
+| `replay-success/` | Frozen lookup artifact, deterministic `SUCCESS`, typed balance output, no model in the replay. |
+| `replay-business-outcome/` | Missing member terminates as `BUSINESS_OUTCOME / MEMBER_NOT_FOUND`, not a system failure. |
+| `replay-session-recovery/` | Forced mid-flow expiry, bounded relogin/reconstruction, guarded retry, and terminal `SUCCESS`. |
+| `replay-cross-tenant/` | Exact NW variant snapshot and deterministic `SUCCESS` against the second tenant. |
+| `risky-gating/` | Irreversible account opening is denied without approval and terminates `FAILED / RISKY_STEP_BLOCKED`. |
+| `hitl-approval/` | Approval-only path: `PENDING -> APPROVED`, zero human state changes, no `HUMAN_CONTROL`, then one approved automated risky action and `SUCCESS`. |
+| `hitl-manual-takeover/` | Genuine same-session path: `PENDING -> HUMAN_CONTROL -> RESUMED`; the operator clicks the visible live-session screenshot twice, accepts the held native dialog, establishes a semantic before/after delta, satisfies the declared `postCheck`, and finishes `SUCCESS` without retry or fast-forward. |
 
-Reproduce any of these with the commands in the root README, then run
-`npm run verify:submission`.
+Replay bundles include a single matching `ledger.jsonl` row. Manual takeover
+also includes normalized `before.json` / `after.json`, distinct screenshots,
+the console transition log, and engine-side `human_surface_events` containing
+the human pointer coordinates and accepted dialog. Local staging paths and
+credentials are excluded from the curated package.
+
+To regenerate the replays after `npm run build`, use
+`node scripts/capture-release-evidence.mjs automated`, `approval`, and `manual`.
+Generate `manifest.json` last with `node scripts/gen-manifest.mjs`; any later
+byte change requires regenerating the manifest.

@@ -1,30 +1,31 @@
-{"t":"2026-08-25T00:58:37.560Z","type":"run_start","runId":"replay-2026-08-25T00-58-37-558Z-e35ae1","kind":"replay","label":"legacybank.lookup-member-balance"}
-{"t":"2026-08-25T00:58:37.562Z","type":"replay_start","capability":"legacybank.lookup-member-balance","version":"1.0.0","tenant":"base"}
-{"t":"2026-08-25T00:58:38.675Z","type":"step_start","stepId":"s1","intent":"Enter operator user ID","action":"fill"}
-{"t":"2026-08-25T00:58:38.722Z","type":"located","stepId":"s1","viaFallback":false,"fingerprintScore":0.8}
-{"t":"2026-08-25T00:58:38.779Z","type":"after_step","stepId":"s1","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\002-ok-s1.png"}
-{"t":"2026-08-25T00:58:38.780Z","type":"step_ok","stepId":"s1","ms":105}
-{"t":"2026-08-25T00:58:38.780Z","type":"step_start","stepId":"s2","intent":"Enter operator password","action":"fill"}
-{"t":"2026-08-25T00:58:38.794Z","type":"located","stepId":"s2","viaFallback":false,"fingerprintScore":0.8}
-{"t":"2026-08-25T00:58:38.842Z","type":"after_step","stepId":"s2","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\003-ok-s2.png"}
-{"t":"2026-08-25T00:58:38.843Z","type":"step_ok","stepId":"s2","ms":63}
-{"t":"2026-08-25T00:58:38.843Z","type":"step_start","stepId":"s3","intent":"Click Sign In","action":"click"}
-{"t":"2026-08-25T00:58:38.858Z","type":"located","stepId":"s3","viaFallback":false,"fingerprintScore":1}
-{"t":"2026-08-25T00:58:39.725Z","type":"after_step","stepId":"s3","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/home.aspx"],"shot":"shots\\004-ok-s3.png"}
-{"t":"2026-08-25T00:58:39.726Z","type":"step_ok","stepId":"s3","ms":883}
-{"t":"2026-08-25T00:58:39.727Z","type":"step_start","stepId":"s4","intent":"Click Member Search","action":"click"}
-{"t":"2026-08-25T00:58:39.767Z","type":"located","stepId":"s4","viaFallback":false,"fingerprintScore":0.65}
-{"t":"2026-08-25T00:58:40.516Z","type":"after_step","stepId":"s4","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/search.aspx"],"shot":"shots\\005-ok-s4.png"}
-{"t":"2026-08-25T00:58:40.517Z","type":"step_ok","stepId":"s4","ms":791}
-{"t":"2026-08-25T00:58:40.517Z","type":"step_start","stepId":"s5","intent":"Type into member id","action":"fill"}
-{"t":"2026-08-25T00:58:40.564Z","type":"located","stepId":"s5","viaFallback":false,"fingerprintScore":0.8}
-{"t":"2026-08-25T00:58:40.617Z","type":"after_step","stepId":"s5","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/search.aspx"],"shot":"shots\\006-ok-s5.png"}
-{"t":"2026-08-25T00:58:40.618Z","type":"step_ok","stepId":"s5","ms":101}
-{"t":"2026-08-25T00:58:40.618Z","type":"step_start","stepId":"s6","intent":"Click Find Member","action":"click"}
-{"t":"2026-08-25T00:58:40.635Z","type":"located","stepId":"s6","viaFallback":false,"fingerprintScore":1}
-{"t":"2026-08-25T00:58:41.493Z","type":"after_step","stepId":"s6","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/results.aspx"],"shot":"shots\\007-ok-s6.png"}
-{"t":"2026-08-25T00:58:41.493Z","type":"step_ok","stepId":"s6","ms":875}
-{"t":"2026-08-25T00:58:41.494Z","type":"step_start","stepId":"s7","intent":"Click Select","action":"click"}
-{"t":"2026-08-25T00:59:19.056Z","type":"business_outcome","stepId":"s7","code":"MEMBER_NOT_FOUND","via":"pre-coordinate-check"}
-{"t":"2026-08-25T00:59:19.060Z","type":"provenance_updated","status":"BUSINESS_OUTCOME","artifactSha256":"dc92db60f626fd3ccca0e426bca32ce3ebaaad948a514907943c9d7c4bf4ef42","degradedSteps":0}
-{"t":"2026-08-25T00:59:20.107Z","type":"replay_result","runId":"replay-2026-08-25T00-58-37-558Z-e35ae1","capabilityId":"legacybank.lookup-member-balance","capabilityVersion":"1.0.0","artifactSha256":"dc92db60f626fd3ccca0e426bca32ce3ebaaad948a514907943c9d7c4bf4ef42","status":"BUSINESS_OUTCOME","businessOutcome":{"code":"MEMBER_NOT_FOUND","description":"Expected business result detected via page text","returnsToCaller":{"outcomeCode":"MEMBER_NOT_FOUND"}},"timeline":[{"stepId":"s1","intent":"Enter operator user ID","phase":"act","ok":true,"ms":58},{"stepId":"s2","intent":"Enter operator password","phase":"act","ok":true,"ms":22},{"stepId":"s3","intent":"Click Sign In","phase":"act","ok":true,"ms":848},{"stepId":"s4","intent":"Click Member Search","phase":"act","ok":true,"ms":747},{"stepId":"s5","intent":"Type into member id","phase":"act","ok":true,"ms":58},{"stepId":"s6","intent":"Click Find Member","phase":"act","ok":true,"ms":834}],"degradedSteps":[],"startedAt":"2026-08-25T00:58:37.323Z","finishedAt":"2026-08-25T00:59:20.107Z"}
+{"t":"2026-08-26T05:15:31.378Z","type":"run_start","runId":"replay-2026-08-26T05-15-31-377Z-a47f36","kind":"replay","label":"legacybank.lookup-member-balance"}
+{"t":"2026-08-26T05:15:31.380Z","type":"artifact_definition","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","definitionRef":"artifact.executed.json"}
+{"t":"2026-08-26T05:15:31.380Z","type":"replay_start","capability":"legacybank.lookup-member-balance","version":"2.0.0","tenant":"base"}
+{"t":"2026-08-26T05:15:31.785Z","type":"step_start","stepId":"auth1","intent":"Enter operator user ID (engine-side)","action":"fill","mode":"auth","attempt":1}
+{"t":"2026-08-26T05:15:31.826Z","type":"located","stepId":"auth1","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-26T05:15:32.500Z","type":"after_step","stepId":"auth1","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\002-ok-auth1.png"}
+{"t":"2026-08-26T05:15:32.500Z","type":"step_ok","stepId":"auth1","ms":715,"mode":"auth","attempt":1}
+{"t":"2026-08-26T05:15:32.500Z","type":"step_start","stepId":"auth2","intent":"Enter operator password (engine-side)","action":"fill","mode":"auth","attempt":1}
+{"t":"2026-08-26T05:15:32.513Z","type":"located","stepId":"auth2","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-26T05:15:33.184Z","type":"after_step","stepId":"auth2","topUrl":"http://localhost:7788/acme/login.aspx","frameUrls":["=http://localhost:7788/acme/login.aspx"],"shot":"shots\\003-ok-auth2.png"}
+{"t":"2026-08-26T05:15:33.184Z","type":"step_ok","stepId":"auth2","ms":684,"mode":"auth","attempt":1}
+{"t":"2026-08-26T05:15:33.185Z","type":"step_start","stepId":"auth3","intent":"Submit credentials (engine-side)","action":"click","mode":"auth","attempt":1}
+{"t":"2026-08-26T05:15:33.201Z","type":"located","stepId":"auth3","viaFallback":false,"fingerprintScore":1}
+{"t":"2026-08-26T05:15:34.690Z","type":"after_step","stepId":"auth3","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/home.aspx"],"shot":"shots\\004-ok-auth3.png"}
+{"t":"2026-08-26T05:15:34.690Z","type":"step_ok","stepId":"auth3","ms":1505,"mode":"auth","attempt":1}
+{"t":"2026-08-26T05:15:34.691Z","type":"step_start","stepId":"s1","intent":"Click Member Search","action":"click","mode":"normal","attempt":1}
+{"t":"2026-08-26T05:15:34.734Z","type":"located","stepId":"s1","viaFallback":false,"fingerprintScore":0.65}
+{"t":"2026-08-26T05:15:36.217Z","type":"after_step","stepId":"s1","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/search.aspx"],"shot":"shots\\005-ok-s1.png"}
+{"t":"2026-08-26T05:15:36.217Z","type":"step_ok","stepId":"s1","ms":1526,"mode":"normal","attempt":1}
+{"t":"2026-08-26T05:15:36.217Z","type":"step_start","stepId":"s2","intent":"Type into member id","action":"fill","mode":"normal","attempt":1}
+{"t":"2026-08-26T05:15:36.256Z","type":"located","stepId":"s2","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-26T05:15:36.934Z","type":"after_step","stepId":"s2","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/search.aspx"],"shot":"shots\\006-ok-s2.png"}
+{"t":"2026-08-26T05:15:36.934Z","type":"step_ok","stepId":"s2","ms":717,"mode":"normal","attempt":1}
+{"t":"2026-08-26T05:15:36.935Z","type":"step_start","stepId":"s3","intent":"Press Enter to submit (member id)","action":"press","mode":"normal","attempt":1}
+{"t":"2026-08-26T05:15:36.949Z","type":"located","stepId":"s3","viaFallback":false,"fingerprintScore":0.8}
+{"t":"2026-08-26T05:15:38.399Z","type":"after_step","stepId":"s3","topUrl":"http://localhost:7788/acme/main.aspx","frameUrls":["=http://localhost:7788/acme/main.aspx","topFrame=http://localhost:7788/acme/topnav.aspx","content=http://localhost:7788/acme/results.aspx"],"shot":"shots\\007-ok-s3.png"}
+{"t":"2026-08-26T05:15:38.400Z","type":"step_ok","stepId":"s3","ms":1466,"mode":"normal","attempt":1}
+{"t":"2026-08-26T05:15:38.400Z","type":"step_start","stepId":"s4","intent":"Click Select","action":"click","mode":"normal","attempt":1}
+{"t":"2026-08-26T05:16:15.966Z","type":"business_outcome","stepId":"s4","code":"MEMBER_NOT_FOUND","via":"pre-coordinate-check"}
+{"t":"2026-08-26T05:16:17.032Z","type":"ledger_appended","status":"BUSINESS_OUTCOME","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","degradedSteps":0}
+{"t":"2026-08-26T05:16:17.033Z","type":"replay_result","runId":"replay-2026-08-26T05-15-31-377Z-a47f36","capabilityId":"legacybank.lookup-member-balance","capabilityVersion":"2.0.0","artifactSha256":"720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07","artifactDefinitionRef":"artifact.executed.json","status":"BUSINESS_OUTCOME","businessOutcome":{"code":"MEMBER_NOT_FOUND","description":"Expected business result detected via page text","returnsToCaller":{"outcomeCode":"MEMBER_NOT_FOUND"}},"timeline":[{"stepId":"auth1","intent":"Enter operator user ID (engine-side)","phase":"act","ok":true,"ms":672},{"stepId":"auth2","intent":"Enter operator password (engine-side)","phase":"act","ok":true,"ms":652},{"stepId":"auth3","intent":"Submit credentials (engine-side)","phase":"act","ok":true,"ms":1469},{"stepId":"s1","intent":"Click Member Search","phase":"act","ok":true,"ms":1493},{"stepId":"s2","intent":"Type into member id","phase":"act","ok":true,"ms":675},{"stepId":"s3","intent":"Press Enter to submit (member id)","phase":"act","ok":true,"ms":1433}],"degradedSteps":[],"startedAt":"2026-08-26T05:15:30.952Z","finishedAt":"2026-08-26T05:16:17.033Z"}

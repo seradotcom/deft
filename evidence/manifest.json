@@ -1,171 +1,714 @@
 {
-  "generatedAt": "2026-08-25T05:41:17.736Z",
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-26T05:18:42.387Z",
   "artifacts": {
-    "legacybank.lookup-member-balance": "2bd98caffe3383539bb04ab8ac504212bfcf90bc5eac19638807334c53f7cf49",
-    "legacybank.open-sub-account": "25b4acbaea4980ee6aa5ecea69fad9cd9cf7e829e832e6c71128a20423ffebc2"
+    "legacybank.lookup-member-balance": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
+    "legacybank.open-sub-account": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93"
   },
   "scenarios": [
     {
-      "dir": "evidence/discovery",
       "scenario": "discovery",
+      "dir": "evidence/discovery",
       "runId": "discovery-2026-08-25T05-27-04-523Z-0f7563",
       "capabilityId": "legacybank.lookup-member-balance",
-      "artifactSha256": null,
-      "expectedResult": "LLM run ends DONE; artifact compiled from this run",
-      "actualResult": null,
+      "expectedResult": "DONE",
+      "tenant": "base",
       "files": [
-        "log.jsonl",
-        "shots/001-1-before.png",
-        "shots/002-1-after.png",
-        "shots/003-2-before.png",
-        "shots/004-2-after.png",
-        "shots/005-3-before.png",
-        "shots/006-3-after.png",
-        "transcript.json"
+        {
+          "path": "log.jsonl",
+          "sha256": "934dcf2a738dfa402a30c4a48a601d25393c89218a20a820449bbc9af035564f",
+          "bytes": 2928
+        },
+        {
+          "path": "shots/001-1-before.png",
+          "sha256": "1bbb73e6e898ff12da5d7e446ba78b7a25e6f4e9570c7392cbe82a0f4c01944b",
+          "bytes": 18347
+        },
+        {
+          "path": "shots/002-1-after.png",
+          "sha256": "252d1c4c72271a243dddf8992915ac4f5034ba9382088fad92b995f3beaf73d2",
+          "bytes": 12357
+        },
+        {
+          "path": "shots/003-2-before.png",
+          "sha256": "252d1c4c72271a243dddf8992915ac4f5034ba9382088fad92b995f3beaf73d2",
+          "bytes": 12357
+        },
+        {
+          "path": "shots/004-2-after.png",
+          "sha256": "2fceae725cbdfb6bd1a3cc67e0056c42c1c254aa0fdbf542f003f3505cfe7912",
+          "bytes": 15239
+        },
+        {
+          "path": "shots/005-3-before.png",
+          "sha256": "2fceae725cbdfb6bd1a3cc67e0056c42c1c254aa0fdbf542f003f3505cfe7912",
+          "bytes": 15239
+        },
+        {
+          "path": "shots/006-3-after.png",
+          "sha256": "69f5e5e243eda861da82aee32da10c1e7b639c9f80203200e2f77acd2194b7b0",
+          "bytes": 23211
+        },
+        {
+          "path": "transcript.json",
+          "sha256": "e441be1f9120eb74603c589b13472e8acf6b92607c440eb171e7bc8012609718",
+          "bytes": 7125
+        }
       ]
     },
     {
-      "dir": "evidence/replay-success",
       "scenario": "replay-success",
-      "runId": "replay-2026-08-25T00-55-59-530Z-748e9a",
+      "dir": "evidence/replay-success",
+      "runId": "replay-2026-08-26T05-15-19-017Z-e2e18b",
       "capabilityId": "legacybank.lookup-member-balance",
-      "artifactSha256": "b17d2a4e30bdc00c82064a6accd78de528a316aed0c66515b12f01dd1da91191",
-      "expectedResult": "SUCCESS + savingsBalance=$2,450.75, zero degraded steps",
-      "actualResult": "SUCCESS",
+      "expectedResult": "SUCCESS",
+      "tenant": "base",
       "files": [
-        "001-entry.png",
-        "002-ok-s1.png",
-        "003-ok-s2.png",
-        "004-ok-s3.png",
-        "005-ok-s4.png",
-        "006-ok-s5.png",
-        "007-ok-s6.png",
-        "008-ok-s7.png",
-        "009-ok-x8.png",
-        "log.jsonl"
-      ]
+        {
+          "path": "artifact.executed.json",
+          "sha256": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
+          "bytes": 18645
+        },
+        {
+          "path": "ledger.jsonl",
+          "sha256": "62b25f8e033aa285fa48ea2337fc119de938065ffb02fa302571a38442f20fb6",
+          "bytes": 288
+        },
+        {
+          "path": "log.jsonl",
+          "sha256": "1b96f54a4b91b60922070a28dfc96ebd946f91a49061241c4a3593bfe3d09eb3",
+          "bytes": 7400
+        },
+        {
+          "path": "shots/001-entry.png",
+          "sha256": "50bd84236b4793a8d2ffbb301e23fcf9ad398f82080372c6653ff1cb54e34dff",
+          "bytes": 10681
+        },
+        {
+          "path": "shots/002-ok-auth1.png",
+          "sha256": "694508f23ba43ede59543576809691d3c4ca325464e693c9757b8f1d0ab5d690",
+          "bytes": 11567
+        },
+        {
+          "path": "shots/003-ok-auth2.png",
+          "sha256": "dbe73ef9488d981f31cf1fa6a1fa465dd15e25202f456726ebc9f0ad20591d0a",
+          "bytes": 11479
+        },
+        {
+          "path": "shots/004-ok-auth3.png",
+          "sha256": "8bb4950c3449abf115b09fa6b9d7bb0f5c7bde243e9a078b728ea5f89e030a49",
+          "bytes": 18435
+        },
+        {
+          "path": "shots/005-ok-s1.png",
+          "sha256": "82380c4df40de9fb1a7e05bfbec849a52c76abb6dd04b39c747b4337403913dc",
+          "bytes": 12343
+        },
+        {
+          "path": "shots/006-ok-s2.png",
+          "sha256": "8eaa00f05022020e96986ddb6cc7f313f1d5f112d04133e5df9ac5c9aaec301e",
+          "bytes": 13223
+        },
+        {
+          "path": "shots/007-ok-s3.png",
+          "sha256": "ea8218a412f58807adf6ae2a0664db42ddd514e4f30f44bb323c96407359cf89",
+          "bytes": 15269
+        },
+        {
+          "path": "shots/008-ok-s4.png",
+          "sha256": "95ea33a2f5a7b57405b036406eb8caea7c3b116a56e0fccbc50097af06ee06a6",
+          "bytes": 23292
+        },
+        {
+          "path": "shots/009-ok-x5.png",
+          "sha256": "95ea33a2f5a7b57405b036406eb8caea7c3b116a56e0fccbc50097af06ee06a6",
+          "bytes": 23292
+        }
+      ],
+      "artifactDefinition": "artifact.executed.json",
+      "artifactSha256": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
+      "artifactVersion": "2.0.0",
+      "ledger": "ledger.jsonl"
     },
     {
-      "dir": "evidence/replay-business-outcome",
       "scenario": "replay-business-outcome",
-      "runId": "replay-2026-08-25T00-58-37-558Z-e35ae1",
+      "dir": "evidence/replay-business-outcome",
+      "runId": "replay-2026-08-26T05-15-31-377Z-a47f36",
       "capabilityId": "legacybank.lookup-member-balance",
-      "artifactSha256": "dc92db60f626fd3ccca0e426bca32ce3ebaaad948a514907943c9d7c4bf4ef42",
-      "expectedResult": "BUSINESS_OUTCOME / MEMBER_NOT_FOUND",
-      "actualResult": "BUSINESS_OUTCOME",
+      "expectedResult": "BUSINESS_OUTCOME",
+      "tenant": "base",
       "files": [
-        "log.jsonl"
-      ]
+        {
+          "path": "artifact.executed.json",
+          "sha256": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
+          "bytes": 18645
+        },
+        {
+          "path": "ledger.jsonl",
+          "sha256": "9c1fa2dc20e33606530d8e878bf68eb0d3b2c4e669a27fee56078d72c1721b88",
+          "bytes": 297
+        },
+        {
+          "path": "log.jsonl",
+          "sha256": "6ed43ba78ce6827aa9532302cf2745062e4fd93be50e7e0e26f65403fc2f367a",
+          "bytes": 5901
+        },
+        {
+          "path": "shots/001-entry.png",
+          "sha256": "50bd84236b4793a8d2ffbb301e23fcf9ad398f82080372c6653ff1cb54e34dff",
+          "bytes": 10681
+        },
+        {
+          "path": "shots/002-ok-auth1.png",
+          "sha256": "694508f23ba43ede59543576809691d3c4ca325464e693c9757b8f1d0ab5d690",
+          "bytes": 11567
+        },
+        {
+          "path": "shots/003-ok-auth2.png",
+          "sha256": "dbe73ef9488d981f31cf1fa6a1fa465dd15e25202f456726ebc9f0ad20591d0a",
+          "bytes": 11479
+        },
+        {
+          "path": "shots/004-ok-auth3.png",
+          "sha256": "8bb4950c3449abf115b09fa6b9d7bb0f5c7bde243e9a078b728ea5f89e030a49",
+          "bytes": 18435
+        },
+        {
+          "path": "shots/005-ok-s1.png",
+          "sha256": "82380c4df40de9fb1a7e05bfbec849a52c76abb6dd04b39c747b4337403913dc",
+          "bytes": 12343
+        },
+        {
+          "path": "shots/006-ok-s2.png",
+          "sha256": "50fd56919408d0c959211c4279ccf74d07c2596baeed643713d25b8db86a8a54",
+          "bytes": 13114
+        },
+        {
+          "path": "shots/007-ok-s3.png",
+          "sha256": "a20412d4811c12cb2bc1563fd85e844fdf68945281d5338c9588563983ddcf61",
+          "bytes": 14392
+        }
+      ],
+      "artifactDefinition": "artifact.executed.json",
+      "artifactSha256": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
+      "artifactVersion": "2.0.0",
+      "ledger": "ledger.jsonl"
     },
     {
-      "dir": "evidence/replay-session-recovery",
       "scenario": "replay-session-recovery",
-      "runId": "replay-2026-08-25T00-43-53-917Z-5b445d",
+      "dir": "evidence/replay-session-recovery",
+      "runId": "replay-2026-08-26T05-16-17-487Z-601389",
       "capabilityId": "legacybank.lookup-member-balance",
-      "artifactSha256": "f9409863d49b2fee497d9ff12e3b006edc8f54efa62648c572a945e38109d508",
-      "expectedResult": "mid-flow expiry → relogin chain → SUCCESS",
-      "actualResult": "SUCCESS",
+      "expectedResult": "SUCCESS",
+      "tenant": "base",
       "files": [
-        "001-entry.png",
-        "002-ok-s1.png",
-        "003-ok-s2.png",
-        "004-ok-s3.png",
-        "005-recovered-s4.png",
-        "006-ok-s5.png",
-        "007-ok-s6.png",
-        "008-ok-s7.png",
-        "009-ok-x8.png",
-        "log.jsonl"
-      ]
+        {
+          "path": "artifact.executed.json",
+          "sha256": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
+          "bytes": 18645
+        },
+        {
+          "path": "ledger.jsonl",
+          "sha256": "6a06514525f577e3b98c2981468acbcf7cb782bd369f1ea3807fdf7a5d5fd752",
+          "bytes": 288
+        },
+        {
+          "path": "log.jsonl",
+          "sha256": "5cef3b7cdfc5566e8d5addc9be3b68bede2596e8e1f1d148f05f6223e4f3abb4",
+          "bytes": 11724
+        },
+        {
+          "path": "shots/001-entry.png",
+          "sha256": "50bd84236b4793a8d2ffbb301e23fcf9ad398f82080372c6653ff1cb54e34dff",
+          "bytes": 10681
+        },
+        {
+          "path": "shots/002-ok-auth1.png",
+          "sha256": "694508f23ba43ede59543576809691d3c4ca325464e693c9757b8f1d0ab5d690",
+          "bytes": 11567
+        },
+        {
+          "path": "shots/003-ok-auth2.png",
+          "sha256": "dbe73ef9488d981f31cf1fa6a1fa465dd15e25202f456726ebc9f0ad20591d0a",
+          "bytes": 11479
+        },
+        {
+          "path": "shots/004-ok-auth3.png",
+          "sha256": "8bb4950c3449abf115b09fa6b9d7bb0f5c7bde243e9a078b728ea5f89e030a49",
+          "bytes": 18435
+        },
+        {
+          "path": "shots/005-ok-s1-rec1.png",
+          "sha256": "50bd84236b4793a8d2ffbb301e23fcf9ad398f82080372c6653ff1cb54e34dff",
+          "bytes": 10681
+        },
+        {
+          "path": "shots/006-ok-s1-rec2.png",
+          "sha256": "694508f23ba43ede59543576809691d3c4ca325464e693c9757b8f1d0ab5d690",
+          "bytes": 11567
+        },
+        {
+          "path": "shots/007-ok-s1-rec3.png",
+          "sha256": "dbe73ef9488d981f31cf1fa6a1fa465dd15e25202f456726ebc9f0ad20591d0a",
+          "bytes": 11479
+        },
+        {
+          "path": "shots/008-ok-s1-rec4.png",
+          "sha256": "8bb4950c3449abf115b09fa6b9d7bb0f5c7bde243e9a078b728ea5f89e030a49",
+          "bytes": 18435
+        },
+        {
+          "path": "shots/009-ok-s1-rec5.png",
+          "sha256": "8bb4950c3449abf115b09fa6b9d7bb0f5c7bde243e9a078b728ea5f89e030a49",
+          "bytes": 18435
+        },
+        {
+          "path": "shots/010-recovered-s1.png",
+          "sha256": "8bb4950c3449abf115b09fa6b9d7bb0f5c7bde243e9a078b728ea5f89e030a49",
+          "bytes": 18435
+        },
+        {
+          "path": "shots/011-ok-s1.png",
+          "sha256": "82380c4df40de9fb1a7e05bfbec849a52c76abb6dd04b39c747b4337403913dc",
+          "bytes": 12343
+        },
+        {
+          "path": "shots/012-ok-s2.png",
+          "sha256": "39304bf0fa3775d4a9a204e10f9e5238ab24518ff113ed07553ccd55dbbb0a7b",
+          "bytes": 13258
+        },
+        {
+          "path": "shots/013-ok-s3.png",
+          "sha256": "6174a6dedd557bf3c5d6dda727ac898119c5f7b391fe95d30b4c0a6e7e98006f",
+          "bytes": 15173
+        },
+        {
+          "path": "shots/014-ok-s4.png",
+          "sha256": "e00dfd19c22cc4c71b13a69093a3550de1a7d14c9246583f16d81aa469b11d8c",
+          "bytes": 21541
+        },
+        {
+          "path": "shots/015-ok-x5.png",
+          "sha256": "e00dfd19c22cc4c71b13a69093a3550de1a7d14c9246583f16d81aa469b11d8c",
+          "bytes": 21541
+        }
+      ],
+      "artifactDefinition": "artifact.executed.json",
+      "artifactSha256": "720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07",
+      "artifactVersion": "2.0.0",
+      "ledger": "ledger.jsonl"
     },
     {
-      "dir": "evidence/replay-cross-tenant",
       "scenario": "replay-cross-tenant",
-      "runId": "replay-2026-08-25T00-25-57-284Z-a88a79",
+      "dir": "evidence/replay-cross-tenant",
+      "runId": "replay-2026-08-26T05-16-34-996Z-af10b1",
       "capabilityId": "legacybank.lookup-member-balance",
-      "artifactSha256": "33c04aed70e96bef349c53c487aa21113bde5bfa969bfc51bee0443c67ccfbf0",
-      "expectedResult": "tenant=nw variant → SUCCESS, same balance",
-      "actualResult": "SUCCESS",
+      "expectedResult": "SUCCESS",
+      "tenant": "nw",
       "files": [
-        "001-entry.png",
-        "002-ok-s1.png",
-        "003-ok-s2.png",
-        "004-ok-s3.png",
-        "005-ok-s4.png",
-        "006-ok-s5.png",
-        "007-ok-s6.png",
-        "008-ok-s7.png",
-        "009-ok-x8.png",
-        "log.jsonl"
-      ]
+        {
+          "path": "artifact.executed.json",
+          "sha256": "288e07148496126bb1e3561be9452943a5cb44a17c293c678dfebfda52a65b5d",
+          "bytes": 11739
+        },
+        {
+          "path": "ledger.jsonl",
+          "sha256": "ad22c6f9bdd44b60a71127cae150679e6d64ae206c0387b88e4dbaaae4e246bf",
+          "bytes": 286
+        },
+        {
+          "path": "log.jsonl",
+          "sha256": "1068bd9d0c7dd43ed8406bf244440483c0827b72a023c4f4a5a5e8178d102d8a",
+          "bytes": 7343
+        },
+        {
+          "path": "shots/001-entry.png",
+          "sha256": "9067fc2e67ebc32cab06255e0b578b831ce390283656a67f856a293ede48e63b",
+          "bytes": 11189
+        },
+        {
+          "path": "shots/002-ok-auth1.png",
+          "sha256": "9a6697340a8c9cb817b4949e2a0e51c24d9acb1c2d993a0b93bda5d040802d76",
+          "bytes": 12044
+        },
+        {
+          "path": "shots/003-ok-auth2.png",
+          "sha256": "2e9f415db4299b68a3ebd09543540d6d2cc1d0c6f2c95a7fcc54ec7e96539947",
+          "bytes": 11974
+        },
+        {
+          "path": "shots/004-ok-auth3.png",
+          "sha256": "0791907cb0cdece899785009ad9db13f742e93aba24efce21e4c0449362f325b",
+          "bytes": 18532
+        },
+        {
+          "path": "shots/005-ok-s1.png",
+          "sha256": "30393719825050bebc7653aea10bfa0e4c93aab3989caa84354751a3f08a3b2b",
+          "bytes": 12115
+        },
+        {
+          "path": "shots/006-ok-s2.png",
+          "sha256": "4b20cd22c30912fbd0b1c2a92fb553203d46ba8c4448d09b9b7d38bd5bdbbcd0",
+          "bytes": 12979
+        },
+        {
+          "path": "shots/007-ok-s3.png",
+          "sha256": "0a073476af0df74d8ac4e8539d31166106caa13952429977dd38fa24ed9f9cdc",
+          "bytes": 15818
+        },
+        {
+          "path": "shots/008-ok-s4.png",
+          "sha256": "3a4fa59b0d225fdefeaabbe13ef356f42fb563c8b4dac0fe3c74a972b49d2ec6",
+          "bytes": 23419
+        },
+        {
+          "path": "shots/009-ok-x5.png",
+          "sha256": "3a4fa59b0d225fdefeaabbe13ef356f42fb563c8b4dac0fe3c74a972b49d2ec6",
+          "bytes": 23419
+        }
+      ],
+      "artifactDefinition": "artifact.executed.json",
+      "artifactSha256": "288e07148496126bb1e3561be9452943a5cb44a17c293c678dfebfda52a65b5d",
+      "artifactVersion": "2.0.0",
+      "ledger": "ledger.jsonl"
     },
     {
-      "dir": "evidence/risky-gating",
       "scenario": "risky-gating",
-      "runId": "replay-2026-08-25T00-56-08-102Z-8c2562",
+      "dir": "evidence/risky-gating",
+      "runId": "replay-2026-08-26T05-17-05-124Z-9c5fe7",
       "capabilityId": "legacybank.open-sub-account",
-      "artifactSha256": "3b9f55eeb5f8ef714ac88be6df9f9bcedc97e6f927dbf38c9415d98566c013eb",
-      "expectedResult": "FAILED / RISKY_STEP_BLOCKED at the irreversible confirm",
-      "actualResult": "FAILED",
+      "expectedResult": "FAILED",
+      "tenant": "base",
       "files": [
-        "001-entry.png",
-        "002-ok-l1.png",
-        "003-ok-l2.png",
-        "004-ok-l3.png",
-        "005-ok-s4.png",
-        "006-ok-s5.png",
-        "007-ok-s6.png",
-        "008-ok-s7.png",
-        "009-ok-s8.png",
-        "010-ok-s9.png",
-        "011-ok-s10.png",
-        "012-ok-s11.png",
-        "013-ok-s12.png",
-        "log.jsonl"
-      ]
+        {
+          "path": "artifact.executed.json",
+          "sha256": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93",
+          "bytes": 26269
+        },
+        {
+          "path": "ledger.jsonl",
+          "sha256": "ca30fbe69b6df5d74044505b2effc95afd4f1d06c1ae45b8363d72715326f964",
+          "bytes": 287
+        },
+        {
+          "path": "log.jsonl",
+          "sha256": "6eaa3e190c684b999161530fd96ba305e61c879265e3bdc50e3fb31b91763361",
+          "bytes": 10735
+        },
+        {
+          "path": "shots/001-entry.png",
+          "sha256": "50bd84236b4793a8d2ffbb301e23fcf9ad398f82080372c6653ff1cb54e34dff",
+          "bytes": 10681
+        },
+        {
+          "path": "shots/002-ok-l1.png",
+          "sha256": "694508f23ba43ede59543576809691d3c4ca325464e693c9757b8f1d0ab5d690",
+          "bytes": 11567
+        },
+        {
+          "path": "shots/003-ok-l2.png",
+          "sha256": "dbe73ef9488d981f31cf1fa6a1fa465dd15e25202f456726ebc9f0ad20591d0a",
+          "bytes": 11479
+        },
+        {
+          "path": "shots/004-ok-l3.png",
+          "sha256": "8bb4950c3449abf115b09fa6b9d7bb0f5c7bde243e9a078b728ea5f89e030a49",
+          "bytes": 18435
+        },
+        {
+          "path": "shots/005-ok-s4.png",
+          "sha256": "82380c4df40de9fb1a7e05bfbec849a52c76abb6dd04b39c747b4337403913dc",
+          "bytes": 12343
+        },
+        {
+          "path": "shots/006-ok-s5.png",
+          "sha256": "8eaa00f05022020e96986ddb6cc7f313f1d5f112d04133e5df9ac5c9aaec301e",
+          "bytes": 13223
+        },
+        {
+          "path": "shots/007-ok-s6.png",
+          "sha256": "ea8218a412f58807adf6ae2a0664db42ddd514e4f30f44bb323c96407359cf89",
+          "bytes": 15269
+        },
+        {
+          "path": "shots/008-ok-s7.png",
+          "sha256": "95ea33a2f5a7b57405b036406eb8caea7c3b116a56e0fccbc50097af06ee06a6",
+          "bytes": 23292
+        },
+        {
+          "path": "shots/009-ok-s8.png",
+          "sha256": "541b8426741f2f006d0d036acea2a75383ca56140c586c62f12da0d1f0256c52",
+          "bytes": 19279
+        },
+        {
+          "path": "shots/010-ok-s9.png",
+          "sha256": "d91dcba35f0172f4b4e263589fb5530bd973796ea41f5780b60e757a43ac544e",
+          "bytes": 19410
+        },
+        {
+          "path": "shots/011-ok-s10.png",
+          "sha256": "fe7c11cfb458a4d64854ad5de495ad72a8dc153532004bd037fcaa7329926147",
+          "bytes": 20653
+        },
+        {
+          "path": "shots/012-ok-s11.png",
+          "sha256": "2b1c8bdbf0d0ade11a9c35392f497b9d6bc5871431a52f7b4c7cd14a725fd457",
+          "bytes": 21100
+        },
+        {
+          "path": "shots/013-ok-s12.png",
+          "sha256": "e4a3c79f5035bb38114eb8eef64587f84eb1d3a8388621503b67cf827051c3af",
+          "bytes": 20787
+        }
+      ],
+      "artifactDefinition": "artifact.executed.json",
+      "artifactSha256": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93",
+      "artifactVersion": "2.0.0",
+      "ledger": "ledger.jsonl"
     },
     {
-      "dir": "evidence/hitl-approval",
       "scenario": "hitl-approval",
-      "runId": "replay-2026-08-25T05-32-57-100Z-e5c010",
+      "dir": "evidence/hitl-approval",
+      "runId": "replay-2026-08-26T05-17-38-265Z-2cf82f",
       "capabilityId": "legacybank.open-sub-account",
-      "artifactSha256": "25b4acbaea4980ee6aa5ecea69fad9cd9cf7e829e832e6c71128a20423ffebc2",
-      "expectedResult": "operator approval via console → SUCCESS, resumedByHuman=true, audit samples",
-      "actualResult": "SUCCESS",
+      "expectedResult": "SUCCESS",
+      "tenant": "base",
       "files": [
-        "001-entry.png",
-        "002-ok-l1.png",
-        "003-ok-l2.png",
-        "004-ok-l3.png",
-        "005-ok-s4.png",
-        "006-ok-s5.png",
-        "007-ok-s6.png",
-        "008-ok-s7.png",
-        "009-ok-s8.png",
-        "010-ok-s9.png",
-        "011-ok-s10.png",
-        "012-ok-s11.png",
-        "013-ok-s12.png",
-        "014-human-01.png",
-        "015-human-02.png",
-        "016-human-03.png",
-        "017-human-04.png",
-        "018-human-05.png",
-        "019-human-06.png",
-        "020-human-07.png",
-        "021-human-08.png",
-        "022-human-09.png",
-        "023-human-10.png",
-        "024-human-11.png",
-        "025-human-12.png",
-        "026-human-13.png",
-        "027-human-14.png",
-        "028-human-15.png",
-        "029-human-16.png",
-        "030-ok-s13.png",
-        "log.jsonl",
-        "operator-console.png"
-      ]
+        {
+          "path": "artifact.executed.json",
+          "sha256": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93",
+          "bytes": 26269
+        },
+        {
+          "path": "intervention.jsonl",
+          "sha256": "a035504e4b72ccd8d6137525644fe709af2c398fef8238a69fff601a2ba4a07a",
+          "bytes": 3858
+        },
+        {
+          "path": "ledger.jsonl",
+          "sha256": "989a52560fb4fd7c8a6c77d06986435a9f30f9b7d5fd84c3391befb8e61357dc",
+          "bytes": 288
+        },
+        {
+          "path": "log.jsonl",
+          "sha256": "f5bf8161fdc7cbd8ba3d9a64be341d8542371a785e5dda957e73bb905ba3e98d",
+          "bytes": 11257
+        },
+        {
+          "path": "shots/001-entry.png",
+          "sha256": "40f7324c5d92725c1abdf108ba75d57ca1dc53e29f255f8276c9d1fb9fbed8a1",
+          "bytes": 10686
+        },
+        {
+          "path": "shots/002-ok-l1.png",
+          "sha256": "d9e70390cca41880b0f920e3a8b432be261018a82307c6967a17965cfd5e4d74",
+          "bytes": 11518
+        },
+        {
+          "path": "shots/003-ok-l2.png",
+          "sha256": "ca241e5c1053b2848b66c4f957b27077fbee6bd3c990222a3b9e62e7f392570e",
+          "bytes": 11368
+        },
+        {
+          "path": "shots/004-ok-l3.png",
+          "sha256": "9d66442fbec0e460618919a22527c1ab40d19b873aac62ebdae901c0b824e177",
+          "bytes": 18780
+        },
+        {
+          "path": "shots/005-ok-s4.png",
+          "sha256": "a9be469b3eb717c2519d74e534198a41b59573580cacbad37b68d8a724ec076a",
+          "bytes": 12507
+        },
+        {
+          "path": "shots/006-ok-s5.png",
+          "sha256": "8766741317832b538c08a680dff993c3137b81b3b660914d1eeb94c0c92523d1",
+          "bytes": 13270
+        },
+        {
+          "path": "shots/007-ok-s6.png",
+          "sha256": "1cb37936509877fd2f3d94890578c84ab286433d0e9119cf8a01dc0968413902",
+          "bytes": 15628
+        },
+        {
+          "path": "shots/008-ok-s7.png",
+          "sha256": "266602dc0e955873ce81c1505cd694419ade0c80b3e9d622976188e2df497816",
+          "bytes": 23610
+        },
+        {
+          "path": "shots/009-ok-s8.png",
+          "sha256": "bb8827acbfd59fa3706fc4eeb909b7b030a825b512f0246c03a547f4c04d9411",
+          "bytes": 19368
+        },
+        {
+          "path": "shots/010-ok-s9.png",
+          "sha256": "eefbe6698344f5efd408abde3a40695a17c6d05a5da781a3eb1abc79c68dcfc6",
+          "bytes": 19502
+        },
+        {
+          "path": "shots/011-ok-s10.png",
+          "sha256": "43247e6ee287943bbb79e3bfb1ee9ea50dfa323a40601dcfe7845c8799a4bef3",
+          "bytes": 20800
+        },
+        {
+          "path": "shots/012-ok-s11.png",
+          "sha256": "5b4a1c40f45c6f066b276e3808eaa90ee949f7077b1f6ba6cf09accd481e3c02",
+          "bytes": 21285
+        },
+        {
+          "path": "shots/013-ok-s12.png",
+          "sha256": "9fb24eebda880a79927200647606ddb5410ee64148857055547909f5dafc7b48",
+          "bytes": 21190
+        },
+        {
+          "path": "shots/014-ok-s13.png",
+          "sha256": "894544213978b0557a8b81640fdc32857ee9f6e28cb403e68acfab7e3dfb220d",
+          "bytes": 17878
+        }
+      ],
+      "artifactDefinition": "artifact.executed.json",
+      "artifactSha256": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93",
+      "artifactVersion": "2.0.0",
+      "ledger": "ledger.jsonl",
+      "interventionLog": "intervention.jsonl"
+    },
+    {
+      "scenario": "hitl-manual-takeover",
+      "dir": "evidence/hitl-manual-takeover",
+      "runId": "replay-2026-08-26T05-09-32-138Z-5f886f",
+      "capabilityId": "legacybank.open-sub-account",
+      "expectedResult": "SUCCESS",
+      "tenant": "base",
+      "files": [
+        {
+          "path": "after.json",
+          "sha256": "e9dc44f6f2ce98870e70b4042c5a5bec65df0a3994622d9492802824b0972310",
+          "bytes": 1299
+        },
+        {
+          "path": "after.png",
+          "sha256": "94fcd33d7ff56b2a282bd2324d6e1d6e18e9ef34f491b3a83cbd3940edb77486",
+          "bytes": 17838
+        },
+        {
+          "path": "artifact.executed.json",
+          "sha256": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93",
+          "bytes": 26269
+        },
+        {
+          "path": "before.json",
+          "sha256": "bbf9cc2767bb7849e23c19927776b5c07c4ad4da05de8ba711c021d8c6c0c72e",
+          "bytes": 1728
+        },
+        {
+          "path": "before.png",
+          "sha256": "c9061e9e023a035a69e14e6aaeaf81e1b70e3ef3d51eeb82cdea54c966f73d4c",
+          "bytes": 25024
+        },
+        {
+          "path": "intervention.jsonl",
+          "sha256": "b32111e698f168790e2902bd903131c5a8c17a63f18d7cd410fd1a5d25ad36e3",
+          "bytes": 7669
+        },
+        {
+          "path": "ledger.jsonl",
+          "sha256": "941d075c54ca85330664cbe93b3a9fc5b5aa479175c7f40888dc490300b1d3fd",
+          "bytes": 287
+        },
+        {
+          "path": "log.jsonl",
+          "sha256": "5e14e0f61ab12df9acccd24ced0f987e7ca972da72fb51f18ba197cab476cf2f",
+          "bytes": 13682
+        },
+        {
+          "path": "shots/001-entry.png",
+          "sha256": "40f7324c5d92725c1abdf108ba75d57ca1dc53e29f255f8276c9d1fb9fbed8a1",
+          "bytes": 10686
+        },
+        {
+          "path": "shots/002-ok-l1.png",
+          "sha256": "d9e70390cca41880b0f920e3a8b432be261018a82307c6967a17965cfd5e4d74",
+          "bytes": 11518
+        },
+        {
+          "path": "shots/003-ok-l2.png",
+          "sha256": "ca241e5c1053b2848b66c4f957b27077fbee6bd3c990222a3b9e62e7f392570e",
+          "bytes": 11368
+        },
+        {
+          "path": "shots/004-ok-l3.png",
+          "sha256": "9d66442fbec0e460618919a22527c1ab40d19b873aac62ebdae901c0b824e177",
+          "bytes": 18780
+        },
+        {
+          "path": "shots/005-ok-s4.png",
+          "sha256": "a9be469b3eb717c2519d74e534198a41b59573580cacbad37b68d8a724ec076a",
+          "bytes": 12507
+        },
+        {
+          "path": "shots/006-ok-s5.png",
+          "sha256": "8766741317832b538c08a680dff993c3137b81b3b660914d1eeb94c0c92523d1",
+          "bytes": 13270
+        },
+        {
+          "path": "shots/007-ok-s6.png",
+          "sha256": "1cb37936509877fd2f3d94890578c84ab286433d0e9119cf8a01dc0968413902",
+          "bytes": 15628
+        },
+        {
+          "path": "shots/008-ok-s7.png",
+          "sha256": "266602dc0e955873ce81c1505cd694419ade0c80b3e9d622976188e2df497816",
+          "bytes": 23610
+        },
+        {
+          "path": "shots/009-ok-s8.png",
+          "sha256": "bb8827acbfd59fa3706fc4eeb909b7b030a825b512f0246c03a547f4c04d9411",
+          "bytes": 19368
+        },
+        {
+          "path": "shots/010-ok-s9.png",
+          "sha256": "eefbe6698344f5efd408abde3a40695a17c6d05a5da781a3eb1abc79c68dcfc6",
+          "bytes": 19502
+        },
+        {
+          "path": "shots/011-ok-s10.png",
+          "sha256": "43247e6ee287943bbb79e3bfb1ee9ea50dfa323a40601dcfe7845c8799a4bef3",
+          "bytes": 20800
+        },
+        {
+          "path": "shots/012-ok-s11.png",
+          "sha256": "5b4a1c40f45c6f066b276e3808eaa90ee949f7077b1f6ba6cf09accd481e3c02",
+          "bytes": 21285
+        },
+        {
+          "path": "shots/013-ok-s12.png",
+          "sha256": "c9061e9e023a035a69e14e6aaeaf81e1b70e3ef3d51eeb82cdea54c966f73d4c",
+          "bytes": 25024
+        },
+        {
+          "path": "shots/014-manual-before-s13.png",
+          "sha256": "c9061e9e023a035a69e14e6aaeaf81e1b70e3ef3d51eeb82cdea54c966f73d4c",
+          "bytes": 25024
+        },
+        {
+          "path": "shots/015-manual-after-s13.png",
+          "sha256": "94fcd33d7ff56b2a282bd2324d6e1d6e18e9ef34f491b3a83cbd3940edb77486",
+          "bytes": 17838
+        },
+        {
+          "path": "shots/016-ok-s13-manual.png",
+          "sha256": "94fcd33d7ff56b2a282bd2324d6e1d6e18e9ef34f491b3a83cbd3940edb77486",
+          "bytes": 17838
+        }
+      ],
+      "artifactDefinition": "artifact.executed.json",
+      "artifactSha256": "4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93",
+      "artifactVersion": "2.0.0",
+      "ledger": "ledger.jsonl",
+      "interventionLog": "intervention.jsonl",
+      "beforeObservation": "before.json",
+      "afterObservation": "after.json",
+      "beforeScreenshot": "before.png",
+      "afterScreenshot": "after.png"
     }
   ]
 }

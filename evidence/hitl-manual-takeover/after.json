@@ -1,0 +1,7 @@
+{
+  "url": "http://localhost:7788/acme/main.aspx",
+  "title": "LegacyBank manual takeover after",
+  "a11yAnnotatedYaml": "# frame main url=http://localhost:7788/acme/main.aspx\n- document:\n  - iframe\n  - iframe\n# frame topFrame url=http://localhost:7788/acme/topnav.aspx\n- document:\n  - text: ACME Federal Credit Union\n  - link \"Member Search\": [e1]\n    - /url: /acme/search.aspx\n  - link \"Reports\": [e2]\n    - /url: /acme/reports.aspx\n  - text: \"| teller1\"\n  - link \"Log Off\": [e3]\n    - /url: /acme/logoff.aspx\n# frame content url=http://localhost:7788/acme/openaccount.aspx?id=M10041\n- document:\n  - heading \"Confirmation\" [level=1]\n  - table:\n    - rowgroup:\n      - row \"Sub-account opened successfully for member M10041.\":\n        - cell \"Sub-account opened successfully for member M10041.\"\n      - row \"New account number 00092050730\":\n        - cell \"New account number\"\n        - cell \"00092050730\"\n      - row \"Member services copy Emailed to branch ops\":\n        - cell \"Member services copy\"\n        - cell \"Emailed to branch ops\"\n  - paragraph:\n    - link \"View member detail\": [e4]\n      - /url: /acme/detail.aspx?id=M10041",
+  "frames": [],
+  "semanticHash": "8bf9e92a5786128254ccb0783fb1db7b4a42d3686c000b46b2b10b2021eb35e6"
+}

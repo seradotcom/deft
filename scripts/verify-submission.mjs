@@ -15,7 +15,7 @@ const frozenArtifacts = {
   'legacybank.lookup-member-balance': { sha256: '720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07', bytes: 18645, version: '2.0.0' },
   'legacybank.open-sub-account': { sha256: '4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93', bytes: 26269, version: '2.0.0' },
 };
-const runtimeFreezeCommit = '499ca6ef2fed93572330916c084e7f5bab5f7fff';
+const runtimeFreezeCommit = 'b72dde9e5753f5150e1c8bde1b2cdf4f987cc32a';
 
 export function verifySubmission(root = process.cwd(), options = {}) {
   try { return verifySubmissionUnsafe(root, options); }

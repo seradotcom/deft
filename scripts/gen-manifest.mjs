@@ -19,7 +19,7 @@ const scenarioDefinitions = [
 export function generateManifest(root = process.cwd()) {
   const manifest = {
     schemaVersion: 2,
-    runtimeFreezeCommit: '499ca6ef2fed93572330916c084e7f5bab5f7fff',
+    runtimeFreezeCommit: 'b72dde9e5753f5150e1c8bde1b2cdf4f987cc32a',
     generatedAt: new Date().toISOString(), artifacts: {}, scenarios: [],
   };
   for (const capabilityId of ['legacybank.lookup-member-balance', 'legacybank.open-sub-account']) {

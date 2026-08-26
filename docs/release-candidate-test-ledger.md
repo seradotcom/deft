@@ -89,6 +89,23 @@ The worktree remained free of generated validation ledgers, legacy temporary tes
 - Existing curated `/evidence` is explicitly marked pre-freeze and must not be treated as release evidence. Task 7 must regenerate every scenario and the manifest from these exact bytes.
 - Invalidation boundary: any later runtime/schema/compiler change, capability byte change, relevant dependency/lockfile change, or behavioral documentation change invalidates Task 7 evidence and returns the release to this freeze gate.
 
+## Human-dialog lease and verifier freeze — 2026-08-25
+
+- Runtime freeze commit: `71811e4` (`fix: lease native dialogs to human takeover`).
+- Human dialog handling remains automatic outside takeover; the matching replay session acquires the lease only on the persisted `PENDING -> HUMAN_CONTROL` transition.
+- A held native dialog requires an explicit operator UI decision. Resume is rejected while a dialog remains pending, and the lease is cleaned on resume, abort, callback error, and engine finalization.
+- The simulator's `modalOnPath` fault is opt-in, exact-path scoped, and consumed once; frozen capability bytes are unchanged.
+- Submission verifier commit: `ab7b094` (`feat: verify frozen submission evidence`). It owns the expected scenario/status map and frozen artifact hashes, recomputes every declared byte/hash, requires a complete directory inventory, and rejects malformed, mixed-run, stale-ledger, and nominal-only HITL evidence.
+- Focused native-dialog + operator FSM verification: PASS — 9 tests.
+- Adversarial submission-verifier verification: PASS — 9 tests.
+- Full `npm test`: PASS — 9 files, 101 tests, 262.40 seconds.
+- `npm run typecheck`: PASS.
+- `npm run build`: PASS.
+- `git diff --check`: PASS.
+- Frozen artifacts remain 18,645 / 26,269 bytes with SHA-256 `720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07` and `4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93` respectively.
+
+Evidence generated before `71811e4` is invalid. All curated replay, approval, and manual-takeover bundles must be produced from this runtime freeze or a later documentation/evidence-only commit.
+
 ## Release gate
 
 Pending. This section will be completed only after code freeze, artifact freeze, evidence regeneration, manifest generation, strict verification, fresh-clone verification, and GitHub CI for the exact final commit.

@@ -123,4 +123,11 @@ Evidence generated before the final runtime freeze listed below is invalid. All 
 
 ## Release gate
 
-Pending. This section will be completed only after code freeze, artifact freeze, evidence regeneration, manifest generation, strict verification, fresh-clone verification, and GitHub CI for the exact final commit.
+- Fresh-clone source SHA: `f44aa8ceb17db2d860f9a2eaac5c7bf8ab0f117a`.
+- Fresh `npm ci`: PASS — 136 packages installed, 0 vulnerabilities; no missing optional platform binding.
+- Fresh-clone `npm run typecheck`: PASS.
+- Fresh-clone `npm run build`: PASS.
+- Fresh-clone `npm test`: PASS — 9 files, 103 tests, 268.27 seconds.
+- Fresh-clone `npm run verify:submission`: PASS.
+- Fresh clone remained clean and contained no `debug.log`; both artifact hashes remained exact.
+- GitHub CI for the final `master` commit: pending push.

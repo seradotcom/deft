@@ -13,6 +13,7 @@
  *    the artifact ships as draft for human review either way.
  */
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import {
   CapabilityArtifactSchema,
   normalizeOutputSchema,
@@ -33,6 +34,8 @@ export interface CompileOptions {
   outputsSchema: Record<string, unknown>;
   businessOutcomes?: BusinessOutcome[];
   plannerModel: string;
+  /** Immutable semantic version chosen by the release/compiler caller. */
+  artifactVersion: string;
   /** Verified login targeting captured from discovery's bootstrap steps. */
   loginTargets?: {
     userField?: TargetDescriptor;
@@ -193,7 +196,7 @@ export function compileCapability(
       id: opts.capabilityIdBase,
       name: opts.name,
       description: opts.description,
-      version: '1.0.0',
+      version: opts.artifactVersion,
       status: 'draft',
       createdAt: now,
       updatedAt: now,
@@ -284,6 +287,47 @@ export function compileCapability(
   }
 
   return CapabilityArtifactSchema.parse(artifact);
+}
+
+/** A changed executable definition is a new immutable release and therefore
+ * must receive a new semantic version before it can replace stored bytes. */
+export function assertArtifactRevision(previous: CapabilityArtifact, next: CapabilityArtifact): void {
+  const executable = (artifact: CapabilityArtifact): string => JSON.stringify({
+    target: artifact.target, inputs: artifact.inputs, outputs: artifact.outputs,
+    environmentBindings: artifact.environmentBindings, authPhase: artifact.authPhase,
+    steps: artifact.steps, businessOutcomes: artifact.businessOutcomes,
+    recoveryChains: artifact.recoveryChains, successCondition: artifact.successCondition,
+    riskPolicy: artifact.riskPolicy, redaction: artifact.redaction,
+  });
+  const order = compareSemver(next.metadata.version, previous.metadata.version);
+  if (order < 0 || (executable(previous) !== executable(next) && order === 0)) {
+    throw new Error(`changed executable definition version ${next.metadata.version} must be greater than ${previous.metadata.version}`);
+  }
+}
+
+export function writeArtifactRevision(file: string, exactBytes: string): void {
+  const next = CapabilityArtifactSchema.parse(JSON.parse(exactBytes));
+  if (fs.existsSync(file)) {
+    const previousBytes = fs.readFileSync(file, 'utf8');
+    if (previousBytes === exactBytes) return;
+    const previous = CapabilityArtifactSchema.parse(JSON.parse(previousBytes));
+    assertArtifactRevision(previous, next);
+    if (previous.metadata.version === next.metadata.version) {
+      throw new Error(`immutable artifact bytes changed without a new version: ${next.metadata.version}`);
+    }
+  }
+  fs.writeFileSync(file, exactBytes, 'utf8');
+}
+
+function compareSemver(left: string, right: string): number {
+  const parse = (value: string): [number, number, number] => {
+    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
+    if (!match) throw new Error(`artifact version must be strict semver: ${value}`);
+    return [Number(match[1]), Number(match[2]), Number(match[3])];
+  };
+  const a = parse(left); const b = parse(right);
+  for (let i = 0; i < 3; i += 1) if (a[i] !== b[i]) return a[i]! - b[i]!;
+  return 0;
 }
 
 /** Recovery chain credential actions from the authPhase's verified descriptors. */

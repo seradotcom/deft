@@ -5,7 +5,7 @@
     "id": "legacybank.lookup-member-balance",
     "name": "Look up member and read savings balance",
     "description": "Signs into LegacyBank core, searches a member by ID, opens their record, and reads the Savings account balance from the accounts table.",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "status": "draft",
     "createdAt": "2026-08-25T05:27:23.852Z",
     "updatedAt": "2026-08-25T05:27:23.852Z"

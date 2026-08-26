@@ -5,11 +5,10 @@
     "id": "legacybank.open-sub-account",
     "name": "Open a sub-account for a member",
     "description": "Signs into LegacyBank core, opens the member record, fills the new sub-account form (type, nickname, initial deposit), reviews, and confirms the irreversible opening through the native confirmation dialog.",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "status": "needs-review",
     "createdAt": "2026-08-24T00:21:17.639Z",
-    "updatedAt": "2026-08-24T00:21:17.639Z",
-    "notes": "Operator-authored: descriptors captured live with record-time verified probing (no LLM in the loop)."
+    "updatedAt": "2026-08-25T00:00:00.000Z"
   },
   "target": {
     "appFamily": "legacybank",

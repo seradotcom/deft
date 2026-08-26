@@ -8,8 +8,10 @@ The target is **LegacyBank** (`src/targets/legacybank`): a hostile simulator of
 the real problem — two tenants (ACME FCU / NorthWind CU) on the same vendor
 product, server-rendered `<frameset>`, WebForms controls (`ctl00$…`), no test
 IDs, native `confirm()` on the irreversible step, session timeouts, and a
-fault-injection endpoint. Everything below ran against it; bundles in
-`/evidence`, verified by `npm run verify:submission`.
+fault-injection endpoint. The implementation claims below are covered by the
+test suite. Existing `/evidence` bundles predate the frozen `2.0.0` artifacts
+and are intentionally not release evidence; Task 7 regenerates and verifies
+that package from the frozen bytes.
 
 ## 1. Architecture
 
@@ -71,9 +73,11 @@ Schema contract. Key decisions:
 - **`idempotent: false` on non-idempotent steps** — recovery fast-forward
   refuses to re-execute them (a submit that already happened must not happen
   twice).
-- **The artifact is immutable after compilation.** Runtime history lives in an
-  append-only `validation.jsonl` ledger keyed by artifact sha256. Approval
-  state is derived from the ledger, never written into the definition.
+- **The artifact is immutable after compilation.** An executable-definition
+  change must advance `metadata.version`; `assertArtifactRevision` enforces
+  this at replacement boundaries. Runtime identity is SHA-256 over the exact
+  artifact bytes, while history remains append-only. Approval state is never
+  written into the definition.
 
 ## 3. Determinism & error handling
 
@@ -93,7 +97,8 @@ evidence). Session expiry mid-flow: the login redirect is detected across all
 frame URLs, the relogin chain re-authenticates, then the engine **fast-forwards
 the deterministic flow** (re-runs verified steps, skipping non-idempotent ones
 — crossing one escalates instead of duplicating a side effect) and retries.
-Evidence: `replay-session-recovery/` → SUCCESS.
+Historical pre-freeze bundle: `replay-session-recovery/`; Task 7 regenerates
+the release result from the frozen definition.
 
 **Fail-closed geometry**: frame resolution is strict (`FRAME_NOT_FOUND`, never
 "act on the parent"); the coordinate fallback is legal only for clicks
@@ -112,27 +117,22 @@ recorded on ACME and replayed on **NorthWind** (different branding, labels,
 vendor v2.4) via declarative variant overlays. Patches cover locator names *and*
 recorded fingerprints (identity evidence must match the tenant surface too).
 Vendor-stable `name` attributes in fallback chains provide a second mechanism.
-Evidence: `replay-cross-tenant/` → SUCCESS.
+Historical pre-freeze bundle: `replay-cross-tenant/`; Task 7 regenerates the
+release result from the frozen definition.
 
 ## 5. Escalation & handoff
 
-A **lease** model: exactly one controller (`automation | human`) owns the live
-session. Triggers: the model's `ask_human`, unrecoverable failures, and risky
-steps (blocked unattended, evidence: `risky-gating/`).
+Approval and manual takeover are separate contracts. Approval authorizes one
+risky automated step and never enters `HUMAN_CONTROL`. Manual takeover uses the
+strict `PENDING -> HUMAN_CONTROL -> RESUMED` lease transition in the same
+headed browser session; abort is terminal.
 
-When escalated, the engine captures the **real current observation** and starts
-a **live-session sampler** (~1.5 s screenshot + frame-aggregated text hash) —
-the sample series is the audit record of what the operator did, and
-`humanStateChanges` counts real state transitions under human control. The
-operator works the **same headed browser** via the console's Take Control, then
-Resume. The engine re-observes and continues from actual state — after human
-escalation it retries only the current step (no fast-forward, trusting the
-human's fix); after session recovery it fast-forwards (rebuilding known state).
-
-Evidence (`hitl-approval/`): intervention → real observation on the console →
-takeover → approval → native confirm accepted → SUCCESS with
-`resumedByHuman: true` and 16 audit samples. `operator-console.png` shows the
-intervention card.
+Resume requires the same session plus a semantic difference between real
+before/after browser observations. The engine re-observes the live page,
+validates the failed step's post-check, and continues to the next normal step
+without recovery reconstruction or fast-forward. Transition records and the
+before/after observations form the takeover audit trail. Frozen release
+evidence is regenerated only after executable artifacts are finalized.
 
 ## 6. Safety
 

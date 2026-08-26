@@ -12,10 +12,16 @@ import { createLegacyBankApp } from '../src/targets/legacybank/server.js';
 import { PlaywrightWebDriver } from '../src/surface/driver.js';
 import { buildTargetDescriptor, resolveDescriptor } from '../src/surface/targeting.js';
 import { DEMO_USER } from '../src/targets/legacybank/data.js';
+import os from 'node:os';
+import path from 'node:path';
 
 let server: Server;
 let baseUrl = '';
-const browser: Browser = await chromium.launch({ headless: true });
+const browser: Browser = await chromium.launch({
+  headless: true,
+  args: ['--disable-gpu', '--disable-logging', '--log-level=3'],
+  env: { ...process.env, CHROME_LOG_FILE: path.join(os.tmpdir(), 'deft-targeting-chrome.log') },
+});
 
 beforeAll(async () => {
   const app = createLegacyBankApp() as express.Express;

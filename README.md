@@ -15,9 +15,9 @@ the only way in is to drive the UI the way a human operator would.
 3. **Replay** — the artifact executes deterministically with **no model in the
    loop**, returning typed outputs and a three-way result contract
    (success / business outcome / failure) with full evidence.
-4. **Escalate** — when automation can't safely continue, a human takes control
-   of the *same live session* through an operator console, approves or fixes,
-   and hands control back — with everything audited.
+4. **Escalate** — approval authorizes one risky automated action; manual
+   takeover separately transfers the same live browser session and resumes
+   only after an observable human state change.
 
 ```
 goal ──▶ LLM discovery (once) ──▶ capability artifact ──▶ deterministic replay (always)
@@ -73,9 +73,9 @@ node dist/cli/index.js replay legacybank.lookup-member-balance --input memberId=
 node dist/cli/index.js replay legacybank.lookup-member-balance --tenant nw --input memberId=M10041
 ```
 
-### The full story: risky steps and human approval
+### Risky approval and manual takeover
 
-`legacybank.open-sub-account` (operator-authored, see `/evidence`) opens a
+`legacybank.open-sub-account` is operator-authored and opens a
 financial product — an irreversible action behind a native `window.confirm`:
 
 ```bash
@@ -84,21 +84,27 @@ node dist/cli/index.js replay legacybank.open-sub-account \
   --input memberId=M10041 --input "nickname=Vacation fund" --input deposit=100
 # → FAILED / RISKY_STEP_BLOCKED at the confirm step
 
-# With an operator in the loop: the console raises an intervention with the
-# REAL live observation; the browser is headed — take control of the actual
-# window, approve, resume → the run completes with a human-action audit.
+# With an operator in the loop, approve the single risky automated submit.
+# Approval does not enter HUMAN_CONTROL or satisfy manual takeover.
 node dist/cli/index.js replay legacybank.open-sub-account \
   --input memberId=M10041 --input "nickname=Vacation fund" --input deposit=100 \
   --escalate --headed
 # operator console: http://localhost:7790
 ```
 
+When replay is stuck, the same console creates a `manual_takeover`
+intervention. Its valid path is `PENDING -> HUMAN_CONTROL -> RESUMED`; resume
+requires the same session and a real semantic before/after change. Abort is
+terminal.
+
+The stored executable artifacts are release `2.0.0`. Any executable-definition
+change requires a new semantic version; replay identity is SHA-256 over the
+exact artifact bytes supplied to the engine.
+
 ### Verify the evidence package
 
 ```bash
 npm run verify:submission
-# ✓ provenance chains · artifact sha256 per run · terminal statuses
-# ✓ referenced screenshots exist · no duplicated runs · no secrets
 ```
 
 ### Tests (offline)

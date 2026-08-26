@@ -1,0 +1,3 @@
+capabilities/*.json text eol=lf
+evidence/**/*.json text eol=lf
+evidence/**/*.jsonl text eol=lf

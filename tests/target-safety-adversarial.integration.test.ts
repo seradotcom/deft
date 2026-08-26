@@ -349,7 +349,7 @@ describe('compiler and resolver ambiguity contracts', () => {
       appFamily: 'example', capabilityIdBase: 'example.submit-form', name: 'Submit form',
       description: 'Submit a synthetic form through an Enter-terminated fill.',
       entryUrlTemplate: 'http://example.test/form', inputs: { value: 'value' },
-      outputsSchema: { type: 'object', properties: {}, required: [], additionalProperties: false }, plannerModel: 'test',
+      outputsSchema: { type: 'object', properties: {}, required: [], additionalProperties: false }, plannerModel: 'test', artifactVersion: '1.0.0',
     });
     const submit = compiled.steps.find((step) => step.action === 'press');
 
@@ -378,7 +378,7 @@ describe('compiler and resolver ambiguity contracts', () => {
     const compiled = compileCapability(result, {
       appFamily: 'example', capabilityIdBase: 'example.search', name: 'Search',
       description: 'Submit a reviewed read-only search control.', entryUrlTemplate: 'http://example.test/form',
-      inputs: {}, outputsSchema: { type: 'object', properties: {}, required: [], additionalProperties: false }, plannerModel: 'test',
+      inputs: {}, outputsSchema: { type: 'object', properties: {}, required: [], additionalProperties: false }, plannerModel: 'test', artifactVersion: '1.0.0',
     });
 
     expect(compiled.steps[0]?.submission).toBe('SUBMIT');

@@ -11,7 +11,7 @@ import { Command } from 'commander';
 import { loadConfig } from '../core/config.js';
 import { HybridVisionPlanner } from '../agent/planner.js';
 import { DiscoveryRun } from '../agent/discover.js';
-import { compileCapability } from '../agent/compiler.js';
+import { compileCapability, writeArtifactRevision } from '../agent/compiler.js';
 import { replayCapability } from '../replay/engine.js';
 import { defaultPolicy } from '../safety/policy.js';
 import { CapabilityArtifactSchema } from '../core/artifact.js';
@@ -61,6 +61,7 @@ program
   .option('--input <pairs...>', 'typed inputs used during this run', [])
   .option('--outcome <specs...>', 'business outcome declarations', [])
   .option('--max-steps <n>', 'planner budget', '14')
+  .option('--artifact-version <semver>', 'explicit immutable artifact version')
   .option('--headed', 'show the browser window', false)
   .action(async (cmd) => {
     const cfg = loadConfig();
@@ -147,6 +148,7 @@ program
       },
       businessOutcomes: parseOutcomes(cmd.outcome),
       plannerModel: cfg.plannerModel,
+      artifactVersion: cmd.artifactVersion ?? initialVersion(path.join(cfg.capabilitiesDir, `${cmd.capabilityId}.json`)),
       loginTargets: extractLoginTargets(result),
     });
 
@@ -154,7 +156,7 @@ program
     const file = path.join(cfg.capabilitiesDir, `${artifact.metadata.id}.json`);
     // Belt-and-suspenders: the artifact write passes through secret scrubbing.
     const { redactDeep } = await import('../safety/redact.js');
-    fs.writeFileSync(file, redactDeep(JSON.stringify(artifact, null, 2)));
+    writeArtifactRevision(file, `${redactDeep(JSON.stringify(artifact, null, 2))}\n`);
     console.log(JSON.stringify({
       compiled: file,
       status: artifact.metadata.status,
@@ -243,6 +245,11 @@ async function ensure(c: OperatorConsole, cfg: { operatorPort: number }, mark: (
   await c.start();
   mark();
   console.error(`(operator console at http://localhost:${cfg.operatorPort})`);
+}
+
+function initialVersion(file: string): string {
+  if (!fs.existsSync(file)) return '1.0.0';
+  throw new Error('existing capability requires an explicit greater --artifact-version');
 }
 
 function extractLoginTargets(result: Awaited<ReturnType<DiscoveryRun['run']>>) {

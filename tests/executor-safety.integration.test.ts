@@ -133,7 +133,7 @@ describe('guarded executor recovery invariants', () => {
     const capability = artifact(fixture.baseUrl, 'manual-takeover-live-session', [{
       id: 'blocked-control', intent: 'Human repairs the live state', action: 'click', target: target('blocked'),
       postCheck: { assert: 'elementTextContains', target: target('state'), text: 'REPAIRED' },
-      recoverableErrors: [], riskClass: 'safe', idempotent: true, expectsDialog: false,
+      recoverableErrors: [], riskClass: 'safe', idempotent: false, expectsDialog: false,
     }]);
     let takeoverSession = '';
     const result = await replayCapability(capability, {

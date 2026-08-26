@@ -66,7 +66,8 @@ function verifySubmissionUnsafe(root, options) {
       const replayStarts = events.filter((event) => event.type === 'replay_start');
       const definitions = events.filter((event) => event.type === 'artifact_definition');
       if (starts.length !== 1 || replayStarts.length !== 1 || definitions.length !== 1) fail(`${scenario.scenario}: exactly one run_start, replay_start and artifact_definition required`);
-      if (starts[0]?.runId !== scenario.runId || starts[0]?.label !== scenario.capabilityId ||
+      const expectedRunLabel = scenario.tenant === 'base' ? scenario.capabilityId : `${scenario.capabilityId}@${scenario.tenant}`;
+      if (starts[0]?.runId !== scenario.runId || starts[0]?.label !== expectedRunLabel ||
           replayStarts[0]?.capability !== scenario.capabilityId || replayStarts[0]?.version !== scenario.artifactVersion || replayStarts[0]?.tenant !== scenario.tenant ||
           definitions[0]?.artifactSha256 !== scenario.artifactSha256 || definitions[0]?.definitionRef !== scenario.artifactDefinition) {
         fail(`${scenario.scenario}: run/artifact definition facts mismatch`);
@@ -221,6 +222,13 @@ function verifyManualTakeover(dir, events, scenario, fail) {
   const engineResume = events.filter((event) => event.type === 'manual_takeover_resumed');
   if (engineResume.length !== 1 || engineResume[0].sessionId !== scenario.runId || engineResume[0].humanStateChanges < 1) {
     fail(`${scenario.scenario}: engine resume event missing or inconsistent`);
+  }
+  const surfaceAudit = events.filter((event) => event.type === 'human_surface_events');
+  const surfaceEvents = surfaceAudit.flatMap((event) => Array.isArray(event.events) ? event.events : []);
+  const pointers = surfaceEvents.filter((event) => event.kind === 'human_pointer' && event.control === 'human' && event.sessionId === scenario.runId);
+  const dialogs = surfaceEvents.filter((event) => event.kind === 'dialog' && event.control === 'human' && event.sessionId === scenario.runId && event.accepted === true);
+  if (surfaceAudit.length !== 1 || pointers.length < 2 || dialogs.length !== 1) {
+    fail(`${scenario.scenario}: human pointer and accepted-dialog surface audit required`);
   }
   const resumedStepId = engineResume[0]?.stepId;
   const completed = events.filter((event) => event.type === 'step_ok' && event.stepId === resumedStepId && event.completedBy === 'manual_takeover');

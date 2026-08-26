@@ -52,6 +52,7 @@ export interface ReplayOptions {
       begin: () => void | Promise<void>;
       isPending: () => boolean;
       resolve: (action: 'accept' | 'dismiss') => Promise<void>;
+      clickAt: (x: number, y: number) => Promise<void>;
       cleanup: () => Promise<void>;
     };
   }) => Promise<InterventionResult>;

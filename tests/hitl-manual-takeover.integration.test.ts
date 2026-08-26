@@ -29,6 +29,20 @@ afterEach(async () => {
 });
 
 describe('manual takeover FSM', () => {
+  it('serializes empty browser-button request bodies as valid JSON', async () => {
+    const console_ = await startConsole();
+    const pending = console_.requestAndWait({
+      kind: 'approval', source: 'replay', reason: 'approve risky action', observation: observation('before'),
+    });
+    const html = await (await fetch(`${console_.baseUrl}/`)).text();
+    expect(html).toContain("body:JSON.stringify({})");
+    const [intervention] = console_.listInterventions();
+    await fetch(`${console_.baseUrl}/api/interventions/${intervention!.id}/approve`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}),
+    });
+    expect(await pending).toMatchObject({ state: 'APPROVED' });
+  });
+
   it('does not let approval satisfy a manual takeover', async () => {
     const console_ = await startConsole();
     const pending = console_.requestAndWait({

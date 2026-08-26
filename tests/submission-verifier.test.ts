@@ -43,6 +43,11 @@ function fixture(scenario = 'replay-success') {
 function addManualEngineEvent(f: ReturnType<typeof fixture>) {
   const file = path.join(f.root, `evidence/${f.scenario}/log.jsonl`);
   fs.appendFileSync(file, jsonl(
+    { type: 'human_surface_events', stepId: 's1', sessionId: f.runId, events: [
+      { kind: 'human_pointer', control: 'human', sessionId: f.runId },
+      { kind: 'human_pointer', control: 'human', sessionId: f.runId },
+      { kind: 'dialog', control: 'human', sessionId: f.runId, accepted: true },
+    ] },
     { type: 'manual_takeover_resumed', runId: f.runId, sessionId: f.runId, stepId: 's1', humanStateChanges: 1 },
     { type: 'after_step', stepId: 's1', completedBy: 'manual_takeover' },
     { type: 'step_ok', stepId: 's1', completedBy: 'manual_takeover' },

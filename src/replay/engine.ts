@@ -570,13 +570,13 @@ async function runStep(
     return { kind: 'ok' };
   } catch (err) {
     ctx.driver.disarmNextDialog();
-    if (step.idempotent === false && dispatchState !== 'not-started') {
-      const ref = await shot(ctx, `fail-uncertain-${step.id}`);
-      return fail(ctx, step, classifyPhase(err), 'NON_IDEMPOTENT_OUTCOME_UNKNOWN', 'confirmed completion or explicit operator recovery', shortMsg(err), [ref]);
-    }
+    const nonIdempotentOutcomeUnknown = step.idempotent === false && dispatchState !== 'not-started';
     // 1) bounded recovery chain (e.g. session expiry re-login)
     let recovered: string | null = null;
-    if (modeRules.mayRecover) {
+    // Never retry or reconstruct after dispatching a non-idempotent action.
+    // A declared, same-session human takeover may still establish the step's
+    // postCheck explicitly; without that, the outcome remains terminally unknown.
+    if (!nonIdempotentOutcomeUnknown && modeRules.mayRecover) {
       try {
         recovered = await attemptRecovery(ctx, artifact, opts, step, err);
       } catch (recoveryErr) {
@@ -605,11 +605,13 @@ async function runStep(
       return retry;
     }
     // 2) business outcome detection — an "expected failure" is an answer
-    const probe = await pageProbe(ctx);
-    const biz = matchBusinessOutcome(artifact, step.id, probe);
-    if (biz) {
-      ctx.evidence.write({ type: 'business_outcome', stepId: step.id, code: biz.code });
-      return { kind: 'business', business: biz };
+    if (!nonIdempotentOutcomeUnknown) {
+      const probe = await pageProbe(ctx);
+      const biz = matchBusinessOutcome(artifact, step.id, probe);
+      if (biz) {
+        ctx.evidence.write({ type: 'business_outcome', stepId: step.id, code: biz.code });
+        return { kind: 'business', business: biz };
+      }
     }
     // 3) human-in-the-loop escalation (once per step)
     if (opts.onManualTakeover && modeRules.mayEscalateFailure && !ctx.recoveryAttempts.has(`esc:${step.id}`)) {
@@ -650,6 +652,10 @@ async function runStep(
       }
       if (takeover === 'aborted') return fail(ctx, step, 'act', 'OPERATOR_ABORTED', 'operator resume', 'operator aborted manual takeover', []);
       if (takeover === 'invalid') return fail(ctx, step, 'verify', 'MANUAL_TAKEOVER_INVALID', 'same-session resume with a real semantic state change', 'manual takeover evidence was missing, unchanged, or session-mismatched', []);
+    }
+    if (nonIdempotentOutcomeUnknown) {
+      const ref = await shot(ctx, `fail-uncertain-${step.id}`);
+      return fail(ctx, step, classifyPhase(err), 'NON_IDEMPOTENT_OUTCOME_UNKNOWN', 'confirmed completion or explicit operator recovery', shortMsg(err), [ref]);
     }
     // 4) hard failure
     const ref = await shot(ctx, `fail-${step.id}`);
@@ -1002,6 +1008,7 @@ async function manualTakeover(
         begin: () => ctx.driver.beginHumanControl(sessionId),
         isPending: () => ctx.driver.humanDialogState().pending,
         resolve: (action) => ctx.driver.resolveHumanDialog(sessionId, action),
+        clickAt: (x, y) => ctx.driver.humanClickAt(sessionId, x, y),
         cleanup: () => ctx.driver.endHumanControl(sessionId),
       },
     });
@@ -1018,6 +1025,8 @@ async function manualTakeover(
     const after = await ctx.driver.observe();
     const afterSemanticHash = semanticObservationHash(after);
     const afterShot = await ctx.evidence.saveShot(after.screenshotBase64, `manual-after-${step.id}`);
+    const humanSurfaceEvents = ctx.driver.drainEvents();
+    if (humanSurfaceEvents.length > 0) ctx.evidence.write({ type: 'human_surface_events', stepId: step.id, sessionId, events: humanSurfaceEvents });
     const humanStateChanges = beforeSemanticState === semanticObservation(after) ? 0 : 1;
     const sameSession = result.sessionId === sessionId;
     const resumed = sameSession && result.state === 'RESUMED' && humanStateChanges >= 1;

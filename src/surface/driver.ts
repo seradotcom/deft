@@ -53,6 +53,8 @@ export interface SurfaceDriver {
   endHumanControl(sessionId: string): Promise<void>;
   /** Resolve a native dialog held by the matching human session. */
   resolveHumanDialog(sessionId: string, action: 'accept' | 'dismiss'): Promise<void>;
+  /** Dispatch a human-selected viewport coordinate in the leased live session. */
+  humanClickAt(sessionId: string, x: number, y: number): Promise<void>;
   humanDialogState(): { pending: boolean; sessionId?: string };
   // Recorder/compiler helpers:
   factsAtGridPoint(x999: number, y999: number): Promise<ElementFacts | null>;
@@ -229,6 +231,19 @@ export class PlaywrightWebDriver implements SurfaceDriver {
     } finally {
       pending.release();
     }
+  }
+
+  async humanClickAt(sessionId: string, x: number, y: number): Promise<void> {
+    if (this.humanControlSession !== sessionId) throw new Error('human pointer session mismatch');
+    const viewport = this.page.viewportSize();
+    if (!viewport || !Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= viewport.width || y >= viewport.height) {
+      throw new Error('human pointer coordinate outside viewport');
+    }
+    this.eventLog.push({
+      kind: 'human_pointer', detail: `viewport click (${x},${y})`, at: new Date().toISOString(),
+      control: 'human', sessionId,
+    });
+    await this.page.mouse.click(x, y);
   }
 
   humanDialogState(): { pending: boolean; sessionId?: string } {

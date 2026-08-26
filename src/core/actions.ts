@@ -105,7 +105,7 @@ export interface ElementFacts {
 }
 
 export interface SurfaceEvent {
-  kind: 'dialog' | 'navigation' | 'crash';
+  kind: 'dialog' | 'navigation' | 'crash' | 'human_pointer';
   detail: string;
   at: string;
   accepted?: boolean;

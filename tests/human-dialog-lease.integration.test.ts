@@ -38,13 +38,15 @@ describe('native dialog human-control lease', () => {
     const driver = await startDialogDriver();
     driver.beginHumanControl('session-a');
 
-    const click = driver.page.locator('#confirm').click();
+    await expect(driver.humanClickAt('session-b', 40, 20)).rejects.toThrow(/session/i);
+    const click = driver.humanClickAt('session-a', 40, 20);
     await expect.poll(() => driver.humanDialogState()).toMatchObject({ pending: true, sessionId: 'session-a' });
     await expect(driver.resolveHumanDialog('session-b', 'accept')).rejects.toThrow(/session/i);
 
     await driver.resolveHumanDialog('session-a', 'accept');
     await click;
     expect(driver.drainEvents()).toEqual([
+      expect.objectContaining({ kind: 'human_pointer', control: 'human', sessionId: 'session-a' }),
       expect.objectContaining({ kind: 'dialog', accepted: true, control: 'human', sessionId: 'session-a' }),
     ]);
     await driver.endHumanControl('session-a');
@@ -96,6 +98,30 @@ describe('operator console dialog lease', () => {
 });
 
 describe('operator console dialog resolution', () => {
+  it('dispatches a screenshot-selected pointer only inside the matching human lease', async () => {
+    const console_ = new OperatorConsole(0, await tempDirectory());
+    await console_.start(); consoles.push(console_);
+    let clicked = ''; let current = 'before';
+    const result = console_.requestAndWait({
+      kind: 'manual_takeover', source: 'replay', reason: 'pointer', sessionId: 'session-a',
+      observation: observation(current), observeCurrent: async () => observation(current),
+      dialogLease: {
+        begin: () => undefined, isPending: () => false,
+        clickAt: async (x, y) => { clicked = `${x},${y}`; current = 'after'; },
+        cleanup: async () => undefined,
+      },
+    });
+    const [intervention] = console_.listInterventions(); const base = `${console_.baseUrl}/api/interventions/${intervention!.id}`;
+    await fetch(`${base}/takeover`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: 'session-a' }) });
+    const html = await (await fetch(`${console_.baseUrl}/`)).text();
+    expect(html).toContain('/pointer'); expect(html).toContain('Live session; click to control');
+    const pointer = await fetch(`${base}/pointer`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: 'session-a', x: 10, y: 20 }),
+    });
+    expect(pointer.status).toBe(200); expect(clicked).toBe('10,20');
+    await fetch(`${base}/abort`, { method: 'POST' }); expect(await result).toMatchObject({ state: 'ABORTED' });
+  });
+
   it('requires the takeover session and resolves before allowing resume', async () => {
     const console_ = new OperatorConsole(0, await tempDirectory());
     await console_.start();

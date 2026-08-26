@@ -14,6 +14,7 @@ export interface InterventionRequest {
   source: 'discovery' | 'replay'; reason: string; sessionId: string; urlAtPause: string;
   beforeSemanticHash: string; afterSemanticHash?: string; humanStateChanges: number;
   screenshotFile?: string; afterScreenshotFile?: string;
+  currentScreenshotFile?: string;
   a11yOutline?: string; afterA11yOutline?: string; urlAtResume?: string;
   transitionLogFile: string;
 }
@@ -21,6 +22,7 @@ export interface DialogLease {
   begin?: () => void | Promise<void>;
   isPending: () => boolean;
   resolve?: (action: 'accept' | 'dismiss') => Promise<void>;
+  clickAt?: (x: number, y: number) => Promise<void>;
   cleanup?: () => Promise<void>;
 }
 export interface InterventionResult {
@@ -64,10 +66,16 @@ export class OperatorConsole {
     this.app.post('/api/interventions/:id/takeover', (req, res) => this.takeover(req, res));
     this.app.post('/api/interventions/:id/resume', (req, res) => void this.resume(req, res));
     this.app.post('/api/interventions/:id/dialog', (req, res) => void this.resolveDialog(req, res));
+    this.app.post('/api/interventions/:id/pointer', (req, res) => void this.pointer(req, res));
     this.app.post('/api/interventions/:id/abort', (req, res) => this.abort(req, res));
     return new Promise((resolve) => { this.server = createServer(this.app); this.server.listen(this.port, '127.0.0.1', resolve); });
   }
-  stop(): Promise<void> { return new Promise((resolve) => this.server.close(() => resolve())); }
+  stop(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.server.close((error) => error ? reject(error) : resolve());
+      this.server.closeAllConnections();
+    });
+  }
 
   async requestAndWait(input: {
     kind?: InterventionKind; source: 'discovery' | 'replay'; reason: string; sessionId?: string;
@@ -145,9 +153,31 @@ export class OperatorConsole {
     if (!item.dialogLease?.resolve || !item.dialogLease.isPending() || !['accept', 'dismiss'].includes(req.body?.action)) return conflict(res);
     try {
       await item.dialogLease.resolve(req.body.action);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await this.refreshHumanView(item);
       res.json({ ok: true });
     } catch {
       conflict(res);
+    }
+  }
+  private async pointer(req: Request, res: Response): Promise<void> {
+    const item = this.lookup(req, res); if (!item) return;
+    const { sessionId, x, y } = req.body ?? {};
+    if (item.request.kind !== 'manual_takeover' || item.request.state !== 'HUMAN_CONTROL' || sessionId !== item.request.sessionId ||
+        !item.dialogLease?.clickAt || item.dialogLease.isPending() || !Number.isInteger(x) || !Number.isInteger(y)) return conflict(res);
+    let completed = false; let failure: unknown;
+    const click = item.dialogLease.clickAt(x, y).then(() => { completed = true; }).catch((error) => { failure = error; });
+    await Promise.race([click, new Promise((resolve) => setTimeout(resolve, 500))]);
+    if (failure) return conflict(res);
+    if (completed) await this.refreshHumanView(item);
+    res.status(completed ? 200 : 202).json({ ok: true, pendingDialog: item.dialogLease.isPending() });
+  }
+  private async refreshHumanView(item: PendingIntervention): Promise<void> {
+    const current = await item.observeCurrent();
+    if (current.screenshotBase64) {
+      const file = path.join(this.evidenceDir, `intervention-${item.request.id}-current.png`);
+      fs.writeFileSync(file, Buffer.from(current.screenshotBase64, 'base64'));
+      item.request.currentScreenshotFile = file;
     }
   }
   private async abort(req: Request, res: Response): Promise<void> {
@@ -175,8 +205,10 @@ function semanticHash(o: Observation): string {
   return createHash('sha256').update(JSON.stringify({ url: o.url, title: o.title, a11y: o.a11yAnnotatedYaml, frames: o.frames })).digest('hex');
 }
 function renderCard(i: InterventionRequest & { dialogPending?: boolean }): string {
-  const shot = i.screenshotFile ? `<img src="/evidence/${encodeURIComponent(path.basename(i.screenshotFile))}" style="max-width:640px">` : '';
-  const post = (action: string, body = '{}') => `fetch('/api/interventions/${i.id}/${action}',{method:'POST',headers:{'content-type':'application/json'},body:${body}}).then(()=>location.reload())`;
+  const visibleShot = i.currentScreenshotFile ?? i.screenshotFile;
+  const pointer = `const r=this.getBoundingClientRect(),x=Math.round((event.clientX-r.left)*this.naturalWidth/r.width),y=Math.round((event.clientY-r.top)*this.naturalHeight/r.height);fetch('/api/interventions/${i.id}/pointer',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId:'${escapeHtml(i.sessionId)}',x,y})}).then(()=>setTimeout(()=>location.reload(),650))`;
+  const shot = visibleShot ? `<img alt="Live session; click to control" src="/evidence/${encodeURIComponent(path.basename(visibleShot))}" style="max-width:640px;cursor:crosshair"${i.state === 'HUMAN_CONTROL' && !i.dialogPending ? ` onclick="${pointer}"` : ''}>` : '';
+  const post = (action: string, body = 'JSON.stringify({})') => `fetch('/api/interventions/${i.id}/${action}',{method:'POST',headers:{'content-type':'application/json'},body:${body}}).then(()=>location.reload())`;
   const sessionBody = `JSON.stringify({sessionId:'${escapeHtml(i.sessionId)}'})`;
   const dialogControls = i.kind === 'manual_takeover' && i.state === 'HUMAN_CONTROL' && i.dialogPending
     ? `<button onclick="${post('dialog', `JSON.stringify({sessionId:'${escapeHtml(i.sessionId)}',action:'accept'})`)}">Accept dialog</button><button onclick="${post('dialog', `JSON.stringify({sessionId:'${escapeHtml(i.sessionId)}',action:'dismiss'})`)}">Dismiss dialog</button>`

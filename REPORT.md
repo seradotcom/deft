@@ -51,8 +51,9 @@ internal flags to prevent recursion, not to bypass guarantees.
 
 ## 2. Artifact schema
 
-Zod is the single source of truth: static types, runtime validation, JSON
-Schema contract. Key decisions:
+Zod owns the capability structure and runtime artifact validation; embedded
+JSON Schema contracts define typed invocation inputs and outputs and are
+validated with AJV. Key decisions:
 
 - **Input/output contracts are JSON-Schema-shaped objects**, validated with AJV
   at invocation and before SUCCESS — any agent can check the invocation contract
@@ -94,8 +95,9 @@ locators resolved through the verified chain with fingerprint scoring
 **Recovery**: bounded per-step chains (`maxAttempts ≤ 3`, every attempt in
 evidence). Session expiry mid-flow: the login redirect is detected across all
 frame URLs, the relogin chain re-authenticates, then the engine **fast-forwards
-the deterministic flow** (re-runs verified steps, skipping non-idempotent ones;
-crossing one stops fail-closed instead of duplicating a side effect) and
+the deterministic flow** (re-runs verified idempotent prerequisites;
+encountering a non-idempotent prerequisite stops reconstruction fail-closed
+instead of duplicating a side effect) and
 retries; the caller/operator routes such a block explicitly. The submitted
 recovery bundle proves expiry detection, re-authentication, guarded retry, and
 terminal `SUCCESS`. Bounded fast-forward itself is covered by offline tests.

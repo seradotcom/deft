@@ -114,19 +114,26 @@ export class DiscoveryRun {
     ]);
 
     let observation: Observation;
+    let authSteps: RecordedStep[] | null;
     // Land on the entry surface BEFORE the first decision (through the policy gate).
     if (!this.policy.isUrlAllowed(this.goalSpec.entryUrl)) {
       throw new Error(`entry URL outside policy: ${this.goalSpec.entryUrl}`);
     }
     await this.driver.act({ type: 'navigate', url: this.goalSpec.entryUrl });
     await this.driver.waitForLoadStateSettle();
+    try {
+      this.assertAllowedLiveSurfaces('authenticate');
+      authSteps = await this.performDeterministicAuth();
+      observation = await this.observe();
+    } catch (err) {
+      await this.driver.close().catch(() => undefined);
+      this.evidence.write({ type: 'run_end', endState: 'POLICY_LOOP', steps: 0, summary: 'entry surface left policy before authentication' });
+      throw err;
+    }
 
     // Deterministic pre-authentication — the planner NEVER sees credentials.
     // Values are templated to env bindings at record time; the model's first
     // observation is the already-authenticated surface.
-    const authSteps = await this.performDeterministicAuth();
-
-    observation = await this.observe();
     let endState: DiscoveryEndState = 'MAX_STEPS';
     let summary: string | undefined;
     let proposedOutputs: Record<string, string> | undefined;
@@ -166,6 +173,13 @@ export class DiscoveryRun {
             this.evidence.write({ type: 'policy_blocked_surface', step: i + 1, frameUrl: finalDisallowedSurface, operation: 'finalize_outputs' });
             endState = 'POLICY_LOOP';
             summary = 'output binding surface left policy before discovery could finalize';
+            break;
+          }
+          const missingBindings = Object.keys(action.outputs).filter((key) => !(key in bindings));
+          if (missingBindings.length > 0) {
+            this.evidence.write({ type: 'output_binding_incomplete', step: i + 1, missingKeys: missingBindings });
+            endState = 'DEAD_END_DECLARED';
+            summary = `declared output ${missingBindings.map((key) => `"${key}"`).join(', ')} not bound to a verified source`;
             break;
           }
           endState = 'DONE';
@@ -398,6 +412,7 @@ export class DiscoveryRun {
     const fillField = async (selector: string, envTemplate: string, intent: string): Promise<void> => {
       const loc = this.driver.page.locator(selector).first();
       await loc.waitFor({ state: 'visible', timeout: 10000 });
+      this.assertAllowedLiveSurfaces(`write secret for ${intent}`);
       const box = await loc.boundingBox();
       if (!box) throw new Error(`auth selector not visible: ${selector}`);
       const gx = Math.round((((box.x + box.width / 2) / this.opts.viewport.width) * 999));
@@ -427,6 +442,7 @@ export class DiscoveryRun {
     // Submit and wait for the authenticated shell.
     const submit = this.driver.page.locator(auth.submitSelector).first();
     await submit.waitFor({ state: 'visible', timeout: 10000 });
+    this.assertAllowedLiveSurfaces('submit credentials');
     const sbox = await submit.boundingBox();
     if (!sbox) throw new Error('auth submit not visible');
     const facts = await this.driver.factsAtGridPoint(
@@ -453,6 +469,7 @@ export class DiscoveryRun {
       await new Promise((r) => setTimeout(r, 100));
     }
     await this.driver.waitForLoadStateSettle();
+    this.assertAllowedLiveSurfaces('observe authenticated surface');
     this.evidence.write({ type: 'auth_complete', steps: out.length });
     return out;
   }
@@ -506,9 +523,20 @@ export class DiscoveryRun {
   }
 
   private async observe(): Promise<Observation> {
+    this.assertAllowedLiveSurfaces('observe surface');
     const o = await this.driver.observe();
     this.lastUrl = o.url;
     return o;
+  }
+
+  /** Refuse to read from or write to any live web surface outside policy. */
+  private assertAllowedLiveSurfaces(operation: string): void {
+    const disallowed = this.driver.page.frames()
+      .map((frame) => frame.url())
+      .find((url) => url && !/^about:blank$/i.test(url) && !this.policy.isUrlAllowed(url));
+    if (!disallowed) return;
+    this.evidence.write({ type: 'policy_blocked_surface', frameUrl: disallowed, operation });
+    throw new Error(`live surface outside policy during ${operation}: ${disallowed}`);
   }
 }
 

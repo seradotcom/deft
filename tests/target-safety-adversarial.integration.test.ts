@@ -160,9 +160,60 @@ describe('target and surface policy fail-closed behavior', () => {
       { maxSteps: 1, headed: false, viewport: { width: 1440, height: 900 }, runsDir: path.join(trusted.root, 'discovery') }
     );
 
-    await run.run();
+    await expect(run.run()).rejects.toThrow(/outside policy/i);
 
     expect(hostileClicks).toBe(0);
+  });
+
+  it('blocks a hostile auth redirect before writing credentials or calling the planner', async () => {
+    let hostileUsernameWrites = 0;
+    let hostilePasswordWrites = 0;
+    let hostileSubmits = 0;
+    let plannerCalls = 0;
+    const hostile = await serve((app) => {
+      app.post('/username-written', (_req, res) => { hostileUsernameWrites += 1; res.sendStatus(204); });
+      app.post('/password-written', (_req, res) => { hostilePasswordWrites += 1; res.sendStatus(204); });
+      app.post('/submitted', (_req, res) => { hostileSubmits += 1; res.type('html').send('<p>hostile authenticated shell</p>'); });
+      app.get('/login', (_req, res) => res.type('html').send(`
+        <form method="post" action="/submitted">
+          <input id="username" oninput="fetch('/username-written',{method:'POST'})">
+          <input id="password" type="password" oninput="fetch('/password-written',{method:'POST'})">
+          <button id="submit" type="submit">Sign in</button>
+        </form>
+      `));
+    });
+    const trusted = await serve((app) => {
+      app.get('/start', (_req, res) => res.redirect(302, `${hostile.baseUrl}/login`));
+    });
+    const planner: Planner = {
+      async decide() {
+        plannerCalls += 1;
+        return {
+          decision: { action: { type: 'done', summary: 'must never observe hostile UI', outputs: {} }, rawCallName: 'done' },
+          assistantParts: [],
+        };
+      },
+    };
+    const run = new DiscoveryRun(
+      { goal: 'authenticate only on trusted surfaces', baseUrl: trusted.baseUrl, entryUrl: `${trusted.baseUrl}/start` },
+      planner, defaultPolicy(trusted.baseUrl),
+      {
+        maxSteps: 1, headed: false, viewport: { width: 1440, height: 900 },
+        runsDir: path.join(trusted.root, 'hostile-auth-redirect'),
+        auth: {
+          userSelector: '#username', passSelector: '#password', submitSelector: '#submit',
+          username: 'operator', password: 'secret',
+        },
+      }
+    );
+
+    await expect(run.run()).rejects.toThrow(/outside policy/i);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(hostileUsernameWrites).toBe(0);
+    expect(hostilePasswordWrites).toBe(0);
+    expect(hostileSubmits).toBe(0);
+    expect(plannerCalls).toBe(0);
   });
 
   it('refuses to bind discovery outputs from a hostile child frame', async () => {
@@ -186,9 +237,32 @@ describe('target and surface policy fail-closed behavior', () => {
       { maxSteps: 1, headed: false, viewport: { width: 1440, height: 900 }, runsDir: path.join(trusted.root, 'hostile-output-discovery') }
     );
 
+    await expect(run.run()).rejects.toThrow(/outside policy/i);
+  });
+
+  it('does not finish discovery when a declared output cannot be bound', async () => {
+    const trusted = await serve((app) => {
+      app.get('/start', (_req, res) => res.type('html').send('<p>Result is visible, but not in a bindable table.</p>'));
+    });
+    const planner: Planner = {
+      async decide() {
+        return {
+          decision: { action: { type: 'done', summary: 'found an unbound value', outputs: { foo: 'bar' } }, rawCallName: 'done' },
+          assistantParts: [],
+        };
+      },
+    };
+    const run = new DiscoveryRun(
+      { goal: 'return every declared output', baseUrl: trusted.baseUrl, entryUrl: `${trusted.baseUrl}/start` },
+      planner, defaultPolicy(trusted.baseUrl),
+      { maxSteps: 1, headed: false, viewport: { width: 1440, height: 900 }, runsDir: path.join(trusted.root, 'unbound-output-discovery') }
+    );
+
     const result = await run.run();
+
     expect(result.endState).not.toBe('DONE');
     expect(result.outputBindings).toBeUndefined();
+    expect(result.summary).toMatch(/foo.*not bound/i);
   });
 
   it('enforces child-frame policy before extracting hostile text', async () => {

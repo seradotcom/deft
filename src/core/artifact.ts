@@ -2,9 +2,9 @@
  * Capability Artifact schema — the load-bearing contract of the system.
  *
  * A capability is what an AI agent invokes in production: a typed, versioned,
- * reviewable description of a UI flow. Zod is the single source of truth:
- * static types + runtime validation + JSON Schema export (for humans and
- * external agents) all derive from these definitions.
+ * reviewable description of a UI flow. Zod owns the artifact structure,
+ * inferred static types, and runtime validation. Embedded JSON Schema values
+ * independently define the invocation contracts exposed to external agents.
  */
 import { z } from 'zod';
 

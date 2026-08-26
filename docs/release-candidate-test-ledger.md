@@ -82,7 +82,7 @@ The worktree remained free of generated validation ledgers, legacy temporary tes
 - `.gitattributes` pins capability and evidence JSON/JSONL to LF so raw-byte hashes reproduce on Windows and Linux.
 - `capabilities/legacybank.lookup-member-balance.json`: 18,645 bytes; SHA-256 `720de53e89794427d3e86d99bd3dbb8520715d7e23eed804fd41254d74dfee07`.
 - `capabilities/legacybank.open-sub-account.json`: 26,269 bytes; SHA-256 `4369749f3a4bdaa3757307f13d6b1f8c997bfd337e46e9e3db85d9ad552c2d93`.
-- Freeze commit: pending creation of the commit containing these exact bytes; it will be recorded by the immediately following ledger-only commit.
+- Freeze commit: `83fc3a532d856c2acb3b4410490fa0ae741b24fb` (`Freeze versioned capability artifacts`). This ledger-only follow-up does not alter runtime or artifact bytes.
 - Focused artifact/versioning and target-contract verification: PASS — 27 tests, 20.77 seconds.
 - Full `npm test`: PASS — 7 files, 87 tests, 259.58 seconds.
 - `npm run typecheck`: PASS.

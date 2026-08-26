@@ -107,12 +107,12 @@ program
         onEscalation: async (info) => {
           await ensureConsole();
           const verdict = await console_.requestAndWait({
+            kind: 'approval',
             source: 'discovery',
             reason: info.reason,
             observation: info.observation,
-            saveShot: async (_b64, _tag) => '', // screenshot already captured in obs
           });
-          return verdict === 'resumed';
+          return verdict.state === 'APPROVED';
         },
       }
     );
@@ -192,7 +192,7 @@ program
       runtimeEnv: process.env,
       env: { baseUrl: tenantBase ?? cfg.baseUrlByTenant.acme! },
       inputs: parseInputs(cmd.input),
-      headless: !cmd.headed,
+      headless: cmd.escalate ? false : !cmd.headed,
       allowRisky: Boolean(cmd.allowRisky),
       runsDir: cfg.runsDir,
       capabilitiesDir: cfg.capabilitiesDir,
@@ -202,11 +202,22 @@ program
             // The engine hands us the REAL live observation — the console card
             // shows the operator exactly what the automation sees.
             const verdict = await console_.requestAndWait({
+              kind: 'approval',
               source: 'replay',
               reason: info.reason,
               observation: info.observation,
             });
-            return verdict === 'resumed';
+            return verdict.state === 'APPROVED';
+          }
+        : undefined,
+      onManualTakeover: cmd.escalate
+        ? async (info) => {
+            await ensure(console_, cfg, () => { consoleUp = true; });
+            return console_.requestAndWait({
+              kind: 'manual_takeover', source: 'replay', reason: info.reason,
+              sessionId: info.sessionId, observation: info.observation,
+              observeCurrent: info.observeCurrent,
+            });
           }
         : undefined,
     });

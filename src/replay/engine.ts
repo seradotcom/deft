@@ -15,6 +15,7 @@ import {
 } from '../core/artifact.js';
 import type { AgentAction } from '../core/actions.js';
 import type { ElementHandle, Locator } from 'playwright';
+import { createHash } from 'node:crypto';
 import { interpolate, resolveDescriptor, idPatternMatches } from '../surface/targeting.js';
 import { resolveFrameByPathStrict } from '../surface/targeting.js';
 import { gridToPx, type SurfaceActionGuard } from '../surface/driver.js';
@@ -259,9 +260,7 @@ export async function replayCapability(
     outputs: status === 'SUCCESS' ? ctx.outputs : undefined,
     businessOutcome: status === 'BUSINESS_OUTCOME' ? businessOutcome : undefined,
     failure,
-    escalation: ctx.escalation
-      ? { ...ctx.escalation, resumedByHuman: status !== 'FAILED' }
-      : undefined,
+    escalation: ctx.escalation,
     timeline: ctx.timeline,
     degradedSteps: [...new Set(ctx.degradedSteps)],
     startedAt,
@@ -320,7 +319,8 @@ async function runStep(
     if (opts.onEscalation && modeRules.mayApproveRisk && !ctx.recoveryAttempts.has(`risky:${step.id}`)) {
       ctx.recoveryAttempts.set(`risky:${step.id}`, 1);
       const reason = `risky step "${step.intent}" requires operator approval`;
-      const approved = await escalateToHuman(ctx, opts, step, reason);
+      const approvalObservation = await ctx.driver.observe();
+      const approved = await opts.onEscalation({ reason, observation: approvalObservation });
       if (approved) {
         ctx.approvedRiskySteps.add(step.id);
         ctx.evidence.write({ type: 'risky_approved_by_operator', stepId: step.id });
@@ -612,17 +612,44 @@ async function runStep(
       return { kind: 'business', business: biz };
     }
     // 3) human-in-the-loop escalation (once per step)
-    if (opts.onEscalation && modeRules.mayEscalateFailure && !ctx.recoveryAttempts.has(`esc:${step.id}`)) {
+    if (opts.onManualTakeover && modeRules.mayEscalateFailure && !ctx.recoveryAttempts.has(`esc:${step.id}`)) {
       ctx.recoveryAttempts.set(`esc:${step.id}`, 1);
       const reason = `replay stuck at step ${step.id} ("${step.intent}"): ${shortMsg(err)}`;
-      const resumed = await escalateToHuman(ctx, opts, step, reason);
-      if (resumed) {
-        const retry = await reconstructAndRetry(ctx, artifact, opts, step, stepIndex);
-        if (retry.kind === 'failure') {
-          return fail(ctx, step, retry.failure.phase, retry.failure.errorClass, retry.failure.expected, retry.failure.observed, retry.failure.evidenceRefs);
+      const takeover = await manualTakeover(ctx, opts, step, reason);
+      if (takeover === 'resumed') {
+        if (!step.postCheck) {
+          return fail(ctx, step, 'verify', 'MANUAL_TAKEOVER_UNVERIFIED', 'a declared completion predicate for manual takeover', 'the page changed but the failed step has no postCheck', []);
         }
-        return retry;
+        const surfaceFailure = checkSurfaceFailure(ctx, step.postCheck);
+        if (surfaceFailure) {
+          return fail(ctx, step, 'verify', surfaceFailure, describeCheck(step.postCheck), 'manual takeover left the target surface unavailable or outside policy', []);
+        }
+        if (!(await runCheck(ctx, artifact, opts, step.postCheck))) {
+          return fail(ctx, step, 'verify', 'POST_CHECK_FAILED', describeCheck(step.postCheck), 'manual takeover did not establish the required state', []);
+        }
+        ctx.timeline.push({
+          stepId: step.id,
+          intent: step.intent,
+          phase: 'act',
+          ok: true,
+          ms: Date.now() - t0,
+          recovered: true,
+          detail: 'completed by manual takeover in the live session',
+        });
+        const postShot = await shot(ctx, `ok-${step.id}-manual`);
+        ctx.evidence.write({
+          type: 'after_step',
+          stepId: step.id,
+          topUrl: ctx.driver.page.url(),
+          frameUrls: ctx.driver.page.frames().map((f) => `${f.name()}=${f.url()}`),
+          shot: postShot,
+          completedBy: 'manual_takeover',
+        });
+        ctx.evidence.write({ type: 'step_ok', stepId: step.id, ms: Date.now() - t0, mode, attempt, completedBy: 'manual_takeover' });
+        return { kind: 'ok' };
       }
+      if (takeover === 'aborted') return fail(ctx, step, 'act', 'OPERATOR_ABORTED', 'operator resume', 'operator aborted manual takeover', []);
+      if (takeover === 'invalid') return fail(ctx, step, 'verify', 'MANUAL_TAKEOVER_INVALID', 'same-session resume with a real semantic state change', 'manual takeover evidence was missing, unchanged, or session-mismatched', []);
     }
     // 4) hard failure
     const ref = await shot(ctx, `fail-${step.id}`);
@@ -947,89 +974,53 @@ async function runRecoveryActions(
  * control — the sample diff IS the audit record of what the human did.
  * Returns true when the operator resumed (approval or fix applied).
  */
-async function escalateToHuman(
+async function manualTakeover(
   ctx: Ctx,
   opts: ReplayOptions,
   step: Step,
   reason: string
-): Promise<boolean> {
-  if (!opts.onEscalation) return false;
+): Promise<'resumed' | 'aborted' | 'invalid' | 'unavailable'> {
+  if (!opts.onManualTakeover) return 'unavailable';
   const observation = await ctx.driver.observe();
-  ctx.evidence.write({ type: 'escalation_request', stepId: step.id, reason, urlAtPause: observation.url });
-
-  const samples: string[] = [];
-  const hashes: string[] = [];
-  let stateChanges = 0;
-  let sampling = true;
-  const sampler = (async () => {
-    let n = 0;
-    let lastHash = '';
-    while (sampling) {
-      await new Promise((r) => setTimeout(r, 1500));
-      if (!sampling) break;
-      n += 1;
-      try {
-        const shot = await ctx.driver.screenshot();
-        const ref = await ctx.evidence.saveShot(shot.base64, `human-${String(n).padStart(2, '0')}`);
-        // Frameset reality: aggregate EVERY frame's text — the top-level body
-        // of a frameset page is empty, which once produced all-zero hashes.
-        let hay = '';
-        for (const f of ctx.driver.page.frames()) {
-          const t = await f.locator('body').innerText({ timeout: 800 }).catch(() => '');
-          if (t) hay += t + '\n';
-        }
-        const h = hashOf(hay);
-        const changed = lastHash !== '' && h !== lastHash;
-        if (changed) stateChanges += 1;
-        lastHash = h;
-        samples.push(ref);
-        hashes.push(h);
-        ctx.evidence.write({
-          type: 'human_sample',
-          stepId: step.id,
-          n,
-          shot: ref,
-          textHash: h,
-          changed,
-          url: ctx.driver.page.url(),
-        });
-      } catch {
-        /* page mid-navigation — next sample */
-      }
-    }
-  })();
-
-  let approved = false;
-  try {
-    approved = await opts.onEscalation({ reason, observation });
-  } finally {
-    sampling = false;
-    await sampler;
-  }
-
-  ctx.escalation = ctx.escalation ?? {
-    interventionId: `esc-${step.id}`,
-    reason,
-    resumedByHuman: approved,
-    humanSamplesCaptured: samples.length,
-    humanStateChanges: stateChanges,
+  const beforeSemanticState = semanticObservation(observation);
+  const beforeSemanticHash = semanticObservationHash(observation);
+  const beforeShot = await ctx.evidence.saveShot(observation.screenshotBase64, `manual-before-${step.id}`);
+  const sessionId = ctx.evidence.runId;
+  ctx.evidence.write({
+    type: 'manual_takeover_pending', stepId: step.id, reason, sessionId,
+    urlAtPause: observation.url, frameUrls: observation.frames.map((frame) => frame.url),
+    beforeSemanticHash, beforeShot,
+  });
+  const result = await opts.onManualTakeover({ reason, observation, sessionId, observeCurrent: () => ctx.driver.observe() });
+  const after = await ctx.driver.observe();
+  const afterSemanticHash = semanticObservationHash(after);
+  const afterShot = await ctx.evidence.saveShot(after.screenshotBase64, `manual-after-${step.id}`);
+  const humanStateChanges = beforeSemanticState === semanticObservation(after) ? 0 : 1;
+  const sameSession = result.sessionId === sessionId;
+  const resumed = sameSession && result.state === 'RESUMED' && humanStateChanges >= 1;
+  const aborted = sameSession && result.state === 'ABORTED';
+  ctx.escalation = {
+    interventionId: `takeover-${step.id}`, reason, resumedByHuman: resumed,
+    humanSamplesCaptured: 2, humanStateChanges,
   };
   ctx.evidence.write({
-    type: 'escalation_resolved',
-    stepId: step.id,
-    approved,
-    humanSamples: samples.length,
-    humanStateChanges: stateChanges,
-    samples,
+    type: resumed ? 'manual_takeover_resumed' : aborted ? 'manual_takeover_aborted' : 'manual_takeover_invalid',
+    stepId: step.id, sessionId, returnedSessionId: result.sessionId, humanStateChanges,
+    beforeSemanticHash, afterSemanticHash, beforeShot, afterShot,
+    urlBefore: observation.url, urlAfter: after.url,
+    frameUrlsBefore: observation.frames.map((frame) => frame.url),
+    frameUrlsAfter: after.frames.map((frame) => frame.url),
   });
-  return approved;
+  return resumed ? 'resumed' : aborted ? 'aborted' : 'invalid';
+
 }
 
-function hashOf(s: string): string {
-  // Cheap stability signal for the audit diff (not cryptographic).
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(16);
+function semanticObservation(observation: import('../core/actions.js').Observation): string {
+  return JSON.stringify({ url: observation.url, title: observation.title, a11y: observation.a11yAnnotatedYaml, frames: observation.frames });
+}
+
+function semanticObservationHash(observation: import('../core/actions.js').Observation): string {
+  return createHash('sha256').update(semanticObservation(observation)).digest('hex');
 }
 
 // ---------------------------------------------------------------------------

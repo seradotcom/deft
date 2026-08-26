@@ -8,6 +8,7 @@ type AjvValidator = { compile: (s: object) => ((data: unknown) => boolean) & { e
  */
 import type { Locator, Page } from 'playwright';
 import type { Observation } from '../core/actions.js';
+import type { InterventionResult } from '../hitl/operator-console.js';
 import {
   CapabilityArtifactSchema,
   type CapabilityArtifact,
@@ -42,6 +43,7 @@ export interface ReplayOptions {
    * a11y) — that audit trail IS the record of what the human did.
    */
   onEscalation?: (info: { reason: string; observation: Observation }) => Promise<boolean>;
+  onManualTakeover?: (info: { reason: string; observation: Observation; sessionId: string; observeCurrent: () => Promise<Observation> }) => Promise<InterventionResult>;
 }
 
 export interface Ctx {

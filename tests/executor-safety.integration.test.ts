@@ -123,6 +123,89 @@ async function replay(fixture: Fixture, capability: unknown) {
 }
 
 describe('guarded executor recovery invariants', () => {
+  it('continues the same live session after genuine manual takeover without fast-forward', async () => {
+    let repaired = false;
+    const fixture = await startFixture((app) => {
+      app.get('/start', (_req, res) => res.type('html').send(`<button id="blocked" disabled>Blocked</button><p id="state">BROKEN</p><script>setInterval(async()=>{const r=await fetch('/state');document.querySelector('#state').textContent=await r.text()},25)</script>`));
+      app.get('/state', (_req, res) => res.send(repaired ? 'REPAIRED DONE' : 'BROKEN'));
+      app.post('/repair', (_req, res) => { repaired = true; res.sendStatus(204); });
+    });
+    const capability = artifact(fixture.baseUrl, 'manual-takeover-live-session', [{
+      id: 'blocked-control', intent: 'Human repairs the live state', action: 'click', target: target('blocked'),
+      postCheck: { assert: 'elementTextContains', target: target('state'), text: 'REPAIRED' },
+      recoverableErrors: [], riskClass: 'safe', idempotent: true, expectsDialog: false,
+    }]);
+    let takeoverSession = '';
+    const result = await replayCapability(capability, {
+      env: { baseUrl: fixture.baseUrl }, inputs: {}, headless: true,
+      runsDir: fixture.runsDir, capabilitiesDir: fixture.ledgerDir,
+      onManualTakeover: async (info) => {
+        takeoverSession = info.sessionId;
+        await fetch(`${fixture.baseUrl}/repair`, { method: 'POST' });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return {
+          state: 'RESUMED', sessionId: info.sessionId, before: info.observation,
+          humanStateChanges: 0,
+        };
+      },
+    });
+    const log = replayLog(fixture, result.runId);
+    expect(takeoverSession).toBe(result.runId);
+    expect(result.status).toBe('SUCCESS');
+    expect(result.timeline.some((entry) => entry.stepId === 'blocked-control' && entry.ok && entry.recovered)).toBe(true);
+    expect(log.some((event) => event.type === 'manual_takeover_resumed')).toBe(true);
+    expect(log.some((event) => event.type === 'after_step' && event.stepId === 'blocked-control')).toBe(true);
+    expect(log.some((event) => event.type === 'step_ok' && event.stepId === 'blocked-control')).toBe(true);
+    expect(log.some((event) => event.mode === 'fast-forward' || event.type === 'fast_forward_blocked_non_idempotent')).toBe(false);
+  });
+
+  it('rejects an unrelated human state delta when the failed step has no completion predicate', async () => {
+    let unrelatedState = 'BROKEN';
+    let nextStepEffects = 0;
+    const fixture = await startFixture((app) => {
+      app.get('/start', (_req, res) => res.type('html').send(`<button id="blocked" disabled>Blocked</button><p id="state">BROKEN</p><a id="next" href="/next">Next</a><script>setInterval(async()=>{document.querySelector('#state').textContent=await (await fetch('/state')).text()},25)</script>`));
+      app.get('/state', (_req, res) => res.send(unrelatedState));
+      app.get('/next', (_req, res) => { nextStepEffects += 1; res.type('html').send('<p>DONE</p>'); });
+    });
+    const capability = artifact(fixture.baseUrl, 'manual-takeover-unverified-delta', [
+      {
+        id: 'blocked-control', intent: 'Must not be skipped by an unrelated delta', action: 'click', target: target('blocked'),
+        recoverableErrors: [], riskClass: 'safe', idempotent: true, expectsDialog: false,
+      },
+      {
+        id: 'next-step', intent: 'Must never run', action: 'click', target: target('next'),
+        recoverableErrors: [], riskClass: 'safe', idempotent: true, expectsDialog: false,
+      },
+    ]);
+    const result = await replayCapability(capability, {
+      env: { baseUrl: fixture.baseUrl }, inputs: {}, headless: true,
+      runsDir: fixture.runsDir, capabilitiesDir: fixture.ledgerDir,
+      onManualTakeover: async (info) => {
+        unrelatedState = 'CLOCK CHANGED';
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return { state: 'RESUMED', sessionId: info.sessionId, before: info.observation, humanStateChanges: 1 };
+      },
+    });
+    expect(result.status).toBe('FAILED');
+    expect(result.failure?.errorClass).toBe('MANUAL_TAKEOVER_UNVERIFIED');
+    expect(nextStepEffects).toBe(0);
+  });
+
+  it('terminates an aborted takeover as OPERATOR_ABORTED', async () => {
+    const fixture = await startFixture((app) => app.get('/start', (_req, res) => res.type('html').send('<button id="blocked" disabled>Blocked</button><p>NOT DONE</p>')));
+    const capability = artifact(fixture.baseUrl, 'manual-takeover-abort', [{
+      id: 'blocked-control', intent: 'Human aborts', action: 'click', target: target('blocked'),
+      recoverableErrors: [], riskClass: 'safe', idempotent: true, expectsDialog: false,
+    }]);
+    const result = await replayCapability(capability, {
+      env: { baseUrl: fixture.baseUrl }, inputs: {}, headless: true,
+      runsDir: fixture.runsDir, capabilitiesDir: fixture.ledgerDir,
+      onManualTakeover: async (info) => ({ state: 'ABORTED', sessionId: info.sessionId, before: info.observation, humanStateChanges: 0 }),
+    });
+    expect(result.status).toBe('FAILED');
+    expect(result.failure?.errorClass).toBe('OPERATOR_ABORTED');
+  });
+
   it('finalizes a recovery-action policy violation as FAILED with exactly one replay_result', async () => {
     const fixture = await startFixture((app) => {
       app.get('/start', (_req, res) => res.type('html').send('<a id="expire" href="/login.aspx">Expire</a>'));

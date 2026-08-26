@@ -59,6 +59,22 @@ The worktree remained free of generated validation ledgers, legacy temporary tes
 - Delegated human release gate: GO for Task 4.
 - Independent TOCTOU code review: GO for Task 4.
 
+## Genuine manual takeover — 2026-08-25
+
+- Approval and manual takeover use distinct typed callbacks and intervention kinds; approval cannot acquire the browser lease or satisfy takeover.
+- The operator console enforces `PENDING -> HUMAN_CONTROL -> RESUMED` and `PENDING|HUMAN_CONTROL -> ABORTED`; invalid and repeated transitions return HTTP 409.
+- Takeover and resume are bound to the replay session. CLI replay is headed whenever escalation is enabled.
+- Resume requires a live semantic before/after delta observed independently by the engine and a declared post-check that proves the human established the intended state.
+- Valid human completion continues in the same browser without recovery, retry, or fast-forward and emits normal timeline, `after_step`, and `step_ok` evidence.
+- Before/after screenshots, semantic hashes, URLs, frame URLs, a11y state, and the console transition JSONL are persisted. Abort terminates as `OPERATOR_ABORTED`.
+- Red phase: the new console FSM tests failed 4/4 and the initial engine takeover tests failed 2/2 before implementation.
+- Focused HITL + executor verification: PASS — 20 tests, 101.29 seconds.
+- Full `npm test`: PASS — 6 files, 81 tests, 259.50 seconds.
+- `npm run typecheck`: PASS.
+- `git diff --check`: PASS.
+- Delegated human Task 5 gate: GO.
+- Independent static Task 5 audit: GO.
+
 ## Release gate
 
 Pending. This section will be completed only after code freeze, artifact freeze, evidence regeneration, manifest generation, strict verification, fresh-clone verification, and GitHub CI for the exact final commit.

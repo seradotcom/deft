@@ -11,6 +11,8 @@
  *    clicks. Both produce identical evidence.
  */
 import { chromium, type Browser, type BrowserContext, type Frame, type JSHandle, type Page } from 'playwright';
+import os from 'node:os';
+import path from 'node:path';
 import type {
   ActOutcome,
   AgentAction,
@@ -25,11 +27,16 @@ export interface SurfaceDriverOptions {
   viewport?: { width: number; height: number };
 }
 
+export interface SurfaceActionGuard {
+  framePath: string[];
+  isUrlAllowed(url: string): boolean;
+}
+
 export interface SurfaceDriver {
   start(): Promise<void>;
   close(): Promise<void>;
   observe(): Promise<Observation>;
-  act(action: AgentAction): Promise<ActOutcome>;
+  act(action: AgentAction, guard?: SurfaceActionGuard): Promise<ActOutcome>;
   currentUrl(): string;
   bringToFront(): Promise<void>;
   screenshot(): Promise<{ base64: string }>;
@@ -93,10 +100,10 @@ export class PlaywrightWebDriver implements SurfaceDriver {
   async start(): Promise<void> {
     this.browser = await chromium.launch({
       headless: this.opts.headless,
-      args: ['--window-size=1480,1000'],
+      args: ['--window-size=1480,1000', '--disable-gpu', '--disable-logging', '--log-level=3'],
       env: {
         ...process.env,
-        CHROME_LOG_FILE: process.platform === 'win32' ? 'NUL' : '/dev/null',
+        CHROME_LOG_FILE: path.join(os.tmpdir(), `deft-chromium-${process.pid}.log`),
       },
     });
     this.context = await this.browser.newContext({ viewport: this.opts.viewport });
@@ -260,7 +267,7 @@ export class PlaywrightWebDriver implements SurfaceDriver {
 
   // ---- actions --------------------------------------------------------------
 
-  async act(action: AgentAction): Promise<ActOutcome> {
+  async act(action: AgentAction, guard?: SurfaceActionGuard): Promise<ActOutcome> {
     try {
       switch (action.type) {
         case 'navigate':
@@ -271,17 +278,33 @@ export class PlaywrightWebDriver implements SurfaceDriver {
           break;
         case 'click': {
           const t = await this.toTarget(action.hint);
-          if ('px' in t) await this._page.mouse.click(t.px.x, t.px.y);
-          else await (await this.refHandle(t.ref)).asElement()!.click({ timeout: 8000 });
+          if ('px' in t) {
+            this.assertSurfaceGuard(guard);
+            await this._page.mouse.click(t.px.x, t.px.y);
+          } else {
+            const element = (await this.refHandle(t.ref)).asElement();
+            this.assertSurfaceGuard(guard);
+            await element!.click({ timeout: 8000 });
+          }
           break;
         }
         case 'type': {
           const t = await this.toTarget(action.hint);
-          if ('px' in t) await this._page.mouse.click(t.px.x, t.px.y);
-          else await (await this.refHandle(t.ref)).asElement()!.click({ timeout: 8000 });
+          if ('px' in t) {
+            this.assertSurfaceGuard(guard);
+            await this._page.mouse.click(t.px.x, t.px.y);
+          } else {
+            const element = (await this.refHandle(t.ref)).asElement();
+            this.assertSurfaceGuard(guard);
+            await element!.click({ timeout: 8000 });
+          }
+          this.assertSurfaceGuard(guard);
           if (action.clearBeforeTyping) await this._page.keyboard.press('Control+A');
           await this._page.keyboard.type(action.text, { delay: 10 });
-          if (action.pressEnter) await this._page.keyboard.press('Enter');
+          if (action.pressEnter) {
+            this.assertSurfaceGuard(guard);
+            await this._page.keyboard.press('Enter');
+          }
           break;
         }
         case 'select': {
@@ -290,6 +313,7 @@ export class PlaywrightWebDriver implements SurfaceDriver {
           }
           const el = (await this.refHandle(action.hint.elementRef)).asElement();
           if (!el) throw deftError('ELEMENT_NOT_FOUND', `ref missing`);
+          this.assertSurfaceGuard(guard);
           await el.selectOption({ label: action.optionText }).catch(() =>
             el.selectOption(action.optionText)
           );
@@ -301,6 +325,7 @@ export class PlaywrightWebDriver implements SurfaceDriver {
           break;
         }
         case 'key':
+          this.assertSurfaceGuard(guard);
           await this._page.keyboard.press(action.combo);
           break;
         case 'wait':
@@ -377,10 +402,18 @@ export class PlaywrightWebDriver implements SurfaceDriver {
     let frame: Frame = this._page.mainFrame();
     for (const name of path) {
       const next = frame.childFrames().find((f) => f.name() === name || f.url() === name);
-      if (!next) break;
+      if (!next) throw deftError('FRAME_NOT_FOUND', `missing frame path segment ${name}`);
       frame = next;
     }
     return frame;
+  }
+
+  private assertSurfaceGuard(guard?: SurfaceActionGuard): void {
+    if (!guard) return;
+    const frame = this.resolveFramePath(guard.framePath);
+    if (!guard.isUrlAllowed(frame.url())) {
+      throw deftError('POLICY_BLOCKED', `target surface outside policy: ${frame.url()}`);
+    }
   }
 
   // ---- recorder helpers -------------------------------------------------------
@@ -493,13 +526,15 @@ export class PlaywrightWebDriver implements SurfaceDriver {
   async probeSelector(framePath: string[], selector: string): Promise<boolean> {
     const frame = this.resolveFramePath(framePath);
     try {
-      const handle = await frame
-        .locator(selector)
+      const locator = frame.locator(selector);
+      if (await locator.count() !== 1) return false;
+      const handle = await locator
         .first()
         .elementHandle({ timeout: 1200 })
         .catch(() => null);
       if (!handle) return false;
       try {
+        if (await locator.count() !== 1) return false;
         return await handle.evaluate((el) => el.hasAttribute('data-deft-probe'));
       } finally {
         await handle.dispose();
@@ -534,9 +569,11 @@ export class PlaywrightWebDriver implements SurfaceDriver {
         return false;
     }
     try {
+      if (await loc.count() !== 1) return false;
       const handle = await loc.first().elementHandle({ timeout: 1200 }).catch(() => null);
       if (!handle) return false;
       try {
+        if (await loc.count() !== 1) return false;
         return await handle.evaluate((el) => el.hasAttribute('data-deft-probe'));
       } finally {
         await handle.dispose();
@@ -611,6 +648,9 @@ const factsAtPointFn = (coords: number[]): ElementFacts | null => {
     id: el.id || undefined,
     nameAttr: el.getAttribute('name') || undefined,
     typeAttr: el.getAttribute('type') || undefined,
+    submitControl: (el.tagName === 'INPUT' && ['submit', 'image'].includes(inputEl.type)) ||
+      (el.tagName === 'BUTTON' && ((el.getAttribute('type') || '').toLowerCase() === 'submit' ||
+        (!(el.getAttribute('type') || '').trim() && (el as HTMLButtonElement).form !== null))),
     placeholder: inputEl.placeholder || undefined,
     title: el.getAttribute('title') || undefined,
     value: 'value' in el ? String(inputEl.value).slice(0, 90) : undefined,
@@ -645,6 +685,7 @@ const findCellFn = (
   value: string
 ): { rowHeader: string; rowKeyValue: string; colHeader: string } | { ambiguous: true; matchCount: number } | null => {
   const norm = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const hits: Array<{ rowHeader: string; rowKeyValue: string; colHeader: string }> = [];
   for (const table of Array.from(document.querySelectorAll('table'))) {
     const rows = Array.from(table.querySelectorAll('tr'));
     if (rows.length < 2) continue;
@@ -672,16 +713,42 @@ const findCellFn = (
         (c, i) => i !== hitIdx && (c.textContent || '').trim() !== ''
       );
       if (keyIdx === -1) keyIdx = 0;
+      // Persisted extraction bindings need a unique row identity across the
+      // entire table, not merely a unique output value. Two rows sharing the
+      // same candidate key are ambiguous even when their balances differ.
+      const rowKeys = rows.slice(1)
+        .map((r) => Array.from(r.querySelectorAll('td'))[keyIdx])
+        .map((cell) => norm(cell?.textContent || ''))
+        .filter((key) => key.length > 0);
+      if (new Set(rowKeys).size !== rowKeys.length) {
+        return { ambiguous: true, matchCount: rowKeys.length };
+      }
       const rowHeader = headers[keyIdx] ?? '';
       if (!rowHeader) continue;
-      return {
+      hits.push({
         rowHeader,
         rowKeyValue: (first!.cells[keyIdx]?.textContent || '').trim(),
         colHeader: headers[hitIdx] ?? '',
-      };
+      });
     }
   }
-  return null;
+
+  if (hits.length > 1) return { ambiguous: true, matchCount: hits.length };
+  const chosen = hits[0];
+  if (!chosen) return null;
+  let rowKeyOccurrences = 0;
+  for (const table of Array.from(document.querySelectorAll('table'))) {
+    const rows = Array.from(table.querySelectorAll('tr'));
+    const headers = Array.from(rows[0]?.querySelectorAll('th,td') ?? []).map((h) => norm(h.textContent || ''));
+    const keyIdx = headers.indexOf(norm(chosen.rowHeader));
+    if (keyIdx === -1) continue;
+    for (const row of rows.slice(1)) {
+      const keyCell = Array.from(row.querySelectorAll('td'))[keyIdx];
+      if (keyCell && norm(keyCell.textContent || '') === norm(chosen.rowKeyValue)) rowKeyOccurrences += 1;
+    }
+  }
+  if (rowKeyOccurrences !== 1) return { ambiguous: true, matchCount: rowKeyOccurrences };
+  return chosen;
 };
 
 // ---------------------------------------------------------------------------

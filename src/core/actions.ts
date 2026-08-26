@@ -92,6 +92,8 @@ export interface ElementFacts {
   id?: string;
   nameAttr?: string;
   typeAttr?: string;
+  /** True for controls whose activation submits their enclosing form. */
+  submitControl?: boolean;
   placeholder?: string;
   title?: string;
   value?: string;

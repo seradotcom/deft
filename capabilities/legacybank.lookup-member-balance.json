@@ -50,7 +50,9 @@
         "description": "read from table column \"Balance\""
       }
     },
-    "required": ["savingsBalance"],
+    "required": [
+      "savingsBalance"
+    ],
     "additionalProperties": false
   },
   "environmentBindings": {
@@ -213,7 +215,8 @@
       },
       "pageUrl": "http://localhost:7788/acme/search.aspx",
       "keyCombo": "Enter",
-      "idempotent": false,
+      "submission": "SUBMIT",
+      "idempotent": true,
       "recoverableErrors": [
         {
           "chainRef": "relogin",
@@ -452,7 +455,8 @@
         },
         "idempotent": true,
         "recoverableErrors": [],
-        "riskClass": "safe"
+        "riskClass": "safe",
+        "submission": "SUBMIT"
       }
     ]
   },
@@ -610,7 +614,8 @@
         },
         "riskClass": "safe",
         "idempotent": true,
-        "expectsDialog": false
+        "expectsDialog": false,
+        "submission": "SUBMIT"
       },
       {
         "action": "wait",

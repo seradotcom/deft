@@ -208,6 +208,31 @@ describe('release-candidate contract preflight', () => {
     }
   });
 
+  it('requires a unique row key for persisted table extraction bindings', () => {
+    const base = JSON.parse(fs.readFileSync(path.join('capabilities', 'legacybank.lookup-member-balance.json'), 'utf8')) as Record<string, any>;
+    const noRowKey = {
+      ...base,
+      steps: base.steps.map((step: any) => step.action === 'extract' ? {
+        ...step,
+        extract: { ...step.extract, rowMatch: { columnHeader: 'Account Type' } },
+      } : step),
+    };
+    expect(CapabilityArtifactSchema.safeParse(noRowKey).success).toBe(false);
+  });
+
+  it('records explicit SUBMIT semantics instead of treating Enter as an ordinary press', () => {
+    const base = JSON.parse(fs.readFileSync(path.join('capabilities', 'legacybank.lookup-member-balance.json'), 'utf8')) as Record<string, any>;
+    const submit = {
+      ...base,
+      steps: base.steps.map((step: any) => step.id === 's3' ? { ...step, submission: 'SUBMIT', riskClass: 'risky', idempotent: false } : step),
+    };
+    expect(CapabilityArtifactSchema.safeParse(submit).success).toBe(true);
+    expect(CapabilityArtifactSchema.safeParse({
+      ...base,
+      steps: base.steps.map((step: any) => step.id === 's3' ? { ...step, submission: 'UNKNOWN' } : step),
+    }).success).toBe(false);
+  });
+
   it('types input contract failures before browser creation', () => {
     const artifact = CapabilityArtifactSchema.parse(JSON.parse(fs.readFileSync(path.join('capabilities', 'legacybank.lookup-member-balance.json'), 'utf8')));
     expect(() => validateInputs(artifact, {})).toThrowError(expect.objectContaining({ deftClass: 'INPUT_CONTRACT_VIOLATION' }));

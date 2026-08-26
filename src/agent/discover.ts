@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { AgentAction, ElementFacts, Observation } from '../core/actions.js';
 import type { TargetDescriptor } from '../core/artifact.js';
 import { PlaywrightWebDriver } from '../surface/driver.js';
-import { buildTargetDescriptor } from '../surface/targeting.js';
+import { buildTargetDescriptor, resolveFrameByPathStrict } from '../surface/targeting.js';
 import { PolicyEngine } from '../safety/policy.js';
 import { classifyTargetRisk } from '../safety/risk.js';
 import { EvidenceLogger } from '../evidence/logger.js';
@@ -150,10 +150,28 @@ export class DiscoveryRun {
 
         // Terminal decisions -------------------------------------------------
         if (action.type === 'done') {
+          const liveDisallowedSurface = () => this.driver.page.frames()
+            .map((frame) => frame.url())
+            .find((url) => url && !/^about:blank$/i.test(url) && !this.policy.isUrlAllowed(url));
+          const disallowedSurface = liveDisallowedSurface();
+          if (disallowedSurface) {
+            this.evidence.write({ type: 'policy_blocked_surface', step: i + 1, frameUrl: disallowedSurface, operation: 'bind_outputs' });
+            endState = 'POLICY_LOOP';
+            summary = 'agent attempted to finalize outputs while an observed surface was outside policy';
+            break;
+          }
+          const bindings = await this.lookupOutputBindings(observation, action.outputs);
+          const finalDisallowedSurface = liveDisallowedSurface();
+          if (finalDisallowedSurface) {
+            this.evidence.write({ type: 'policy_blocked_surface', step: i + 1, frameUrl: finalDisallowedSurface, operation: 'finalize_outputs' });
+            endState = 'POLICY_LOOP';
+            summary = 'output binding surface left policy before discovery could finalize';
+            break;
+          }
           endState = 'DONE';
           summary = action.summary;
           proposedOutputs = action.outputs;
-          outputBindings = await this.lookupOutputBindings(observation, action.outputs);
+          outputBindings = bindings;
           break;
         }
         if (action.type === 'fail') {
@@ -192,6 +210,16 @@ export class DiscoveryRun {
           continue;
         }
 
+        const isSubmitAction =
+          (action.type === 'type' && action.pressEnter === true) ||
+          (action.type === 'key' && /^Enter$/i.test(action.combo.trim()));
+        if (isSubmitAction && action.type === 'key') {
+          this.evidence.write({ type: 'policy_blocked_risky', step: i + 1, matched: 'submit', target: 'Enter key' });
+          this.blockedCount += 1;
+          this.history.push({ role: 'user', parts: [{ text: 'SYSTEM: Enter submission is blocked during discovery until a human approves it.' }] });
+          continue;
+        }
+
         // Verified targeting capture (before acting!) --------------------------
         const shotBefore = await this.evidence.saveShot(observation.screenshotBase64, `${i + 1}-before`);
         let facts: ElementFacts | undefined;
@@ -226,11 +254,12 @@ export class DiscoveryRun {
             // discovery: the operator decides via escalation, or the model is
             // told to choose another path.
             const risk = classifyTargetRisk(f);
-            if (risk && (action.type === 'click' || action.type === 'select')) {
-              this.evidence.write({ type: 'policy_blocked_risky', step: i + 1, matched: risk, target: facts.accessibleName ?? facts.visibleText });
+            const effectiveRisk = risk ?? (isSubmitAction ? 'submit' : null);
+            if (effectiveRisk && (action.type === 'click' || action.type === 'select' || isSubmitAction)) {
+              this.evidence.write({ type: 'policy_blocked_risky', step: i + 1, matched: effectiveRisk, target: facts.accessibleName ?? facts.visibleText });
               this.blockedCount += 1;
               const approved = (await this.opts.onEscalation?.({
-                reason: `discovery action blocked: target "${facts.accessibleName ?? facts.visibleText}" matches risky verb "${risk}"`,
+                reason: `discovery action blocked: target "${facts.accessibleName ?? facts.visibleText}" matches risky verb "${effectiveRisk}"`,
                 observation,
               })) ?? false;
               if (approved) {
@@ -238,7 +267,7 @@ export class DiscoveryRun {
               } else {
                 this.history.push({
                   role: 'user',
-                  parts: [{ text: `SYSTEM: that action was BLOCKED by policy — "${facts.accessibleName ?? facts.visibleText}" looks like an irreversible/risky control ("${risk}"). It requires a human operator. Do NOT attempt it again; if the goal truly requires it, call ask_human.` }],
+                  parts: [{ text: `SYSTEM: that action was BLOCKED by policy — "${facts.accessibleName ?? facts.visibleText}" looks like an irreversible/risky control ("${effectiveRisk}"). It requires a human operator. Do NOT attempt it again; if the goal truly requires it, call ask_human.` }],
                 });
                 if (this.blockedCount >= 3) {
                   endState = 'POLICY_LOOP';
@@ -252,7 +281,20 @@ export class DiscoveryRun {
         }
 
         // Act ------------------------------------------------------------------
-        const outcome = await this.driver.act(action);
+        const actionFramePath = descriptor?.scope.framePath ?? [];
+        const actionFrame = actionFramePath.length
+          ? resolveFrameByPathStrict(this.driver.page, actionFramePath)
+          : this.driver.page.mainFrame();
+        const actionSurfaceUrl = actionFrame?.url() ?? '';
+        if (!actionFrame || !this.policy.isUrlAllowed(actionSurfaceUrl)) {
+          this.evidence.write({ type: 'policy_blocked_surface', step: i + 1, framePath: actionFramePath, frameUrl: actionSurfaceUrl });
+          this.history.push({ role: 'user', parts: [{ text: `SYSTEM: action blocked because its target surface is outside the allowlist or missing. Do not interact with it.` }] });
+          continue;
+        }
+        const outcome = await this.driver.act(action, {
+          framePath: actionFramePath,
+          isUrlAllowed: (url) => this.policy.isUrlAllowed(url),
+        });
         await this.driver.waitForLoadStateSettle();
         const urlAfter = this.driver.currentUrl();
         const obsAfter = await this.observe();
@@ -428,14 +470,23 @@ export class DiscoveryRun {
     const framePaths = [...new Set(Object.values(obs.refIndex).map((r) => r.framePath.join('>')))]
       .map((s) => (s === '' ? [] : s.split('>')))
       .filter((p) => p.length <= 2);
-    const candidates = [[], ...framePaths];
+    const candidates = framePaths.some((path) => path.length === 0) ? framePaths : [[], ...framePaths];
     const out: Record<
       string,
       { rowHeader: string; rowKeyValue: string; colHeader: string; framePath: string[]; frameUrl: string }
     > = {};
     for (const [key, value] of Object.entries(outputs)) {
+      let found: { rowHeader: string; rowKeyValue: string; colHeader: string; framePath: string[]; frameUrl: string } | null = null;
       for (const fp of candidates) {
+        const frameBefore = resolveFrameByPathStrict(this.driver.page, fp);
+        if (!frameBefore || !this.policy.isUrlAllowed(frameBefore.url())) {
+          throw new Error(`output binding surface is missing or outside policy: [${fp.join('>')}]`);
+        }
         const hit = await this.driver.findTableCellForValue(fp, value).catch(() => null);
+        const frameAfter = resolveFrameByPathStrict(this.driver.page, fp);
+        if (!frameAfter || !this.policy.isUrlAllowed(frameAfter.url())) {
+          throw new Error(`output binding surface changed or left policy during read: [${fp.join('>')}]`);
+        }
         if (!hit) continue;
         // Banking rule: an extraction identity that matches multiple rows is
         // NOT a safe binding. Fail discovery loudly — the operator must scope
@@ -445,11 +496,11 @@ export class DiscoveryRun {
             `ambiguous extraction binding for "${key}": value "${value}" matches ${hit.matchCount} rows — row identity is not unique`
           );
         }
-        const leaf = fp[fp.length - 1]!;
-        const frameUrl = obs.frames.find((f) => f.name === leaf)?.url ?? obs.url;
-        out[key] = { ...hit, framePath: fp, frameUrl };
-        break;
+        const frameUrl = frameAfter.url();
+        if (found) throw new Error(`ambiguous extraction binding for "${key}": value "${value}" appears in multiple tables/frames — row identity is not unique`);
+        found = { ...hit, framePath: fp, frameUrl };
       }
+      if (found) out[key] = found;
     }
     return out;
   }

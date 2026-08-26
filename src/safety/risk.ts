@@ -33,8 +33,11 @@ export function classifyTargetRisk(facts: {
   visibleText?: string;
   role?: string;
   tag?: string;
+  typeAttr?: string;
+  submitControl?: boolean;
 } | null): string | null {
   if (!facts) return null;
+  if (facts.submitControl || facts.typeAttr?.toLowerCase() === 'submit') return 'submit';
   const hay = `${facts.accessibleName ?? ''} ${facts.visibleText ?? ''}`.toLowerCase();
   if (!hay.trim()) return null;
   for (const verb of RISKY_VERBS) {

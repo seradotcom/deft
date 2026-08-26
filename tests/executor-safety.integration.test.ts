@@ -175,11 +175,13 @@ describe('guarded executor recovery invariants', () => {
       intent: 'Apply one irreversible side effect',
       action: 'click',
       target: target('effect'),
+      submission: 'SUBMIT',
       recoverableErrors: sessionRecovery(`${fixture.baseUrl}/recovered`),
-      riskClass: 'safe',
+      riskClass: 'risky',
       idempotent: false,
       expectsDialog: false,
     }]);
+    capability.riskPolicy.onRiskyStep = 'allow';
 
     const result = await replay(fixture, capability);
     const log = replayLog(fixture, result.runId);
@@ -305,12 +307,14 @@ describe('guarded executor recovery invariants', () => {
       intent: 'Apply one irreversible side effect',
       action: 'click',
       target: target('effect'),
+      submission: 'SUBMIT',
       postCheck: { assert: 'pageTextContains', text: 'EXPECTED READY STATE' },
       recoverableErrors: [],
-      riskClass: 'safe',
+      riskClass: 'risky',
       idempotent: false,
       expectsDialog: false,
     }]);
+    capability.riskPolicy.onRiskyStep = 'allow';
 
     const result = await replay(fixture, capability);
     const log = replayLog(fixture, result.runId);

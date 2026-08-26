@@ -152,6 +152,7 @@
       "id": "l3",
       "intent": "Click Sign In",
       "action": "click",
+      "submission": "SUBMIT",
       "target": {
         "primary": {
           "kind": "role",
@@ -312,6 +313,7 @@
       "id": "s6",
       "intent": "Click Find Member",
       "action": "click",
+      "submission": "SUBMIT",
       "target": {
         "primary": {
           "kind": "role",
@@ -636,6 +638,7 @@
       "id": "s12",
       "intent": "Review the sub-account before submitting",
       "action": "click",
+      "submission": "SUBMIT",
       "target": {
         "primary": {
           "kind": "role",
@@ -697,6 +700,9 @@
       "id": "s13",
       "intent": "Confirm the irreversible account opening (native confirm dialog)",
       "action": "click",
+      "submission": "SUBMIT",
+      "idempotent": false,
+      "expectsDialog": true,
       "target": {
         "primary": {
           "kind": "role",

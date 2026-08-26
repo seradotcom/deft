@@ -125,4 +125,29 @@ describe('record-time verified targeting', () => {
     expect(skipped.status).toBe('not-found');
     await driver.close();
   });
+
+  it('never falls back to the parent frame when a declared child frame is missing', async () => {
+    const page = await browser.newPage();
+    await page.setContent('<button id="same">main only</button>');
+    const outcome = await resolveDescriptor(page, {
+      primary: { kind: 'id', id: 'same' },
+      fallbacks: [],
+      scope: { framePath: ['missing-child'] },
+    }, { timeoutMs: 100 });
+    expect(outcome.status).toBe('not-found');
+    await page.close();
+  });
+
+  it('recounts after waiting and rejects a zero-to-many locator transition', async () => {
+    const page = await browser.newPage();
+    await page.setContent('<div id="host"></div><script>setTimeout(() => { host.innerHTML = "<button id=\'late\'>A</button><button id=\'late\'>B</button>"; }, 30)</script>');
+    const outcome = await resolveDescriptor(page, {
+      primary: { kind: 'id', id: 'late' },
+      fallbacks: [],
+      scope: { framePath: [] },
+    }, { timeoutMs: 500 });
+    expect(outcome.status).toBe('not-found');
+    expect(outcome.attempts.some((attempt) => /AMBIGUOUS/.test(attempt.why))).toBe(true);
+    await page.close();
+  });
 });

@@ -110,6 +110,36 @@ export function templateCtx(
   };
 }
 
+/** Validate the live surface selected by a target/check before resolving or
+ * touching a locator. A declared frame path is exact: never fall back to its
+ * parent, and never inspect a frame outside the run's origin policy. */
+export function targetSurfaceFailure(
+  ctx: Ctx,
+  target: { scope?: { framePath?: string[] } } | undefined
+): 'FRAME_NOT_FOUND' | 'POLICY_BLOCKED' | null {
+  if (!target) return null;
+  const framePath = target.scope?.framePath ?? [];
+  const frame = resolveFrameByPathStrict(ctx.driver.page, framePath);
+  if (!frame) return 'FRAME_NOT_FOUND';
+  if (!ctx.policy.isUrlAllowed(frame.url())) return 'POLICY_BLOCKED';
+  return null;
+}
+
+/** Targetless checks/probes still have a surface. Reading a disallowed frame
+ * as part of an aggregate page check would turn hostile content into success. */
+export function checkSurfaceFailure(
+  ctx: Ctx,
+  check: Check | undefined
+): 'FRAME_NOT_FOUND' | 'POLICY_BLOCKED' | null {
+  if (!check) return null;
+  if ('target' in check) return targetSurfaceFailure(ctx, check.target);
+  const disallowed = ctx.driver.page.frames().some((frame) => {
+    const url = frame.url();
+    return Boolean(url) && !/^about:blank$/i.test(url) && !ctx.policy.isUrlAllowed(url);
+  });
+  return disallowed ? 'POLICY_BLOCKED' : null;
+}
+
 /** Resolve all artifact templates before a browser context exists. */
 export function validateArtifactTemplates(
   artifact: CapabilityArtifact,
@@ -399,32 +429,37 @@ export async function runCheck(
   const c = templateCtx(artifact, opts, ctx);
   const page = ctx.driver.page;
   try {
+    const surfaceFailure = checkSurfaceFailure(ctx, check);
+    if (surfaceFailure) return false;
     if (check.assert === 'urlMatchesGlob') {
       // Frameset apps: the TOP url never changes — match any frame's URL too.
       const pattern = interpolate(check.pattern, c);
-      if (globMatch(pattern, page.url())) return true;
-      return page.frames().some((f) => globMatch(pattern, f.url()));
+      if (ctx.policy.isUrlAllowed(page.url()) && globMatch(pattern, page.url())) return true;
+      return page.frames().some((f) => ctx.policy.isUrlAllowed(f.url()) && globMatch(pattern, f.url()));
     }
     if (check.assert === 'pageTextContains') {
       // Frameset apps: aggregate visible text across all frames.
       let hay = '';
-      for (const f of page.frames()) {
+      for (const f of page.frames().filter((frame) => ctx.policy.isUrlAllowed(frame.url()))) {
         const t = await f.locator('body').innerText({ timeout: 2000 }).catch(() => '');
+        if (!ctx.policy.isUrlAllowed(f.url())) return false;
         if (t) hay += t + '\n';
       }
+      if (checkSurfaceFailure(ctx, check)) return false;
       return hay.toLowerCase().includes(interpolate(check.text, c).toLowerCase());
     }
     // Fail-closed: a missing frame in the checkpoint's frame path is a
     // FRAME_NOT_FOUND, never 'check the parent surface instead'.
-    if ((check.target.scope.framePath ?? []).length > 0) {
-      const fr = resolveFrameByPathStrict(page, check.target.scope.framePath ?? []);
-      if (!fr) return false;
-    }
     const res = await resolveDescriptor(page, check.target, { timeoutMs: check.timeoutMs ?? 8000 });
     if (!res.locator) return false;
-    if (check.assert === 'elementVisible') return res.locator.isVisible();
+    if (targetSurfaceFailure(ctx, check.target)) return false;
+    if (check.assert === 'elementVisible') {
+      const visible = await res.locator.isVisible();
+      return targetSurfaceFailure(ctx, check.target) ? false : visible;
+    }
     if (check.assert === 'elementTextContains') {
       const text = await res.locator.innerText({ timeout: check.timeoutMs ?? 8000 });
+      if (targetSurfaceFailure(ctx, check.target)) return false;
       return text.toLowerCase().includes(check.text.toLowerCase());
     }
     return false;
@@ -445,6 +480,7 @@ interface TableQuery {
 
 const tableCellQueryFn = (q: TableQuery): string | null => {
   const norm = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const matches: string[] = [];
   for (const table of Array.from(document.querySelectorAll('table'))) {
     const rows = Array.from(table.querySelectorAll('tr'));
     if (rows.length < 2) continue;
@@ -458,18 +494,16 @@ const tableCellQueryFn = (q: TableQuery): string | null => {
     if (colIdx === -1 || rowIdx === -1) continue;
     // Banking rule: a row identity matching MULTIPLE rows is not an answer.
     // Return null (EXTRACT_FAILED) rather than silently taking the first match.
-    const matching: string[] = [];
     for (const row of rows.slice(1)) {
       const cells = Array.from(row.querySelectorAll('td'));
       const keyCell = cells[rowIdx];
       if (keyCell && norm(keyCell.textContent || '') === norm(q.rowValue)) {
-        matching.push(cells[colIdx]?.textContent?.trim() ?? '');
+        matches.push(cells[colIdx]?.textContent?.trim() ?? '');
       }
     }
-    if (matching.length === 1) return matching[0]!;
-    if (matching.length > 1) return null; // ambiguous row identity — never "first match"
+    if (matches.length > 1) return null;
   }
-  return null;
+  return matches.length === 1 ? matches[0]! : null;
 };
 
 export async function extractStepOutput(
@@ -482,6 +516,13 @@ export async function extractStepOutput(
   const c = templateCtx(artifact, opts, ctx);
   const page: Page = ctx.driver.page;
 
+  const target = ex.strategy === 'tableCell' ? { scope: ex.scope } : ex.target;
+  const surfaceFailure = targetSurfaceFailure(ctx, target);
+  if (surfaceFailure) {
+    ctx.evidence.write({ type: 'extract_error', stepId: step.id, message: surfaceFailure });
+    return null;
+  }
+
   if (ex.strategy === 'tableCell') {
     const frame = resolveFrameByPathStrict(page, ex.scope.framePath ?? []);
     if (!frame) {
@@ -489,15 +530,16 @@ export async function extractStepOutput(
       return null;
     }
     try {
+      if (targetSurfaceFailure(ctx, { scope: ex.scope })) return null;
       const tableCount = await frame.evaluate('document.querySelectorAll("table").length');
       ctx.evidence.write({ type: 'extract_debug', stepId: step.id, frameUrl: frame.url(), tableCount });
-      return (
-        (await frame.evaluate(tableCellQueryFn as never, {
+      const value = ((await frame.evaluate(tableCellQueryFn as never, {
           rowHeader: ex.rowMatch.columnHeader,
           rowValue: interpolate(ex.rowMatch.equalsTemplate ?? ex.rowMatch.containsTemplate ?? '', c),
           colHeader: ex.columnHeader,
-        } as never)) ?? null
-      );
+        } as never)) as string | null) ?? null;
+      if (targetSurfaceFailure(ctx, { scope: ex.scope })) return null;
+      return value;
     } catch (err) {
       ctx.evidence.write({
         type: 'extract_error',
@@ -512,7 +554,9 @@ export async function extractStepOutput(
   // text strategy
   const res = await resolveDescriptor(page, ex.target, { timeoutMs: 8000 });
   if (!res.locator) return null;
+  if (targetSurfaceFailure(ctx, ex.target)) return null;
   const raw = await res.locator.innerText({ timeout: 5000 }).catch(() => null);
+  if (targetSurfaceFailure(ctx, ex.target)) return null;
   if (raw == null) return null;
   if (ex.regexWithGroups) {
     const m = raw.match(new RegExp(ex.regexWithGroups));

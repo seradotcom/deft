@@ -112,8 +112,12 @@ export function compileCapability(
         : [],
       riskClass: riskyHeuristic(rs) ? 'risky' : 'safe',
       idempotent: !riskyHeuristic(rs),
-        expectsDialog: false,
+      expectsDialog: false,
     };
+
+    const recordedSubmitControl = step.action === 'click' &&
+      ['submit', 'image'].includes((step.target?.fingerprint?.attributes?.type ?? '').toLowerCase());
+    if (recordedSubmitControl) step.submission = 'SUBMIT';
 
     if (rs.action.type === 'type') {
       step.valueTemplate = templateFor(rs, opts, isLogin);
@@ -134,9 +138,10 @@ export function compileCapability(
         action: 'press',
         target: step.target,
         keyCombo: 'Enter',
+        submission: 'SUBMIT',
         pageUrl: step.pageUrl,
         recoverableErrors: (step.recoverableErrors ?? []) as Step['recoverableErrors'],
-        riskClass: 'safe',
+        riskClass: 'risky',
         idempotent: false,
         expectsDialog: false,
       });

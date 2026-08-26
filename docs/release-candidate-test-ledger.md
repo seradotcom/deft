@@ -42,6 +42,23 @@ The worktree remained free of generated validation ledgers, legacy temporary tes
 - Delegated human release gate: GO for Task 3.
 - Independent static code review: GO for Task 3.
 
+## Target-surface and submission hardening — 2026-08-25
+
+- Frame lookup is strict: a missing or ambiguous declared child frame never falls back to its parent.
+- Semantic targets are recounted after waits; zero-to-many and one-to-many changes fail closed, and ambiguous semantic locators never degrade to coordinates.
+- Semantic replay pins a DOM element before its final policy check, while coordinate actions carry a frame guard into the driver action boundary.
+- Discovery validates every live frame before and after output binding and assigns `DONE` only after the final live-surface check.
+- Submit effects are explicit in artifacts. Undeclared submit controls are rejected; risky non-idempotent submits require approval, while curated safe idempotent search submits remain unattended.
+- Coordinate fallbacks use live viewport/frame geometry, validate bounds, and hit-test submit semantics at the resolved point.
+- Relational output bindings reject duplicate row identities within or across tables and frames.
+- `tests/target-safety-adversarial.integration.test.ts` + `tests/executor-safety.integration.test.ts`: PASS — 34 tests, 76.23 seconds.
+- Full `npm test`: PASS — 5 files, 74 tests, 216.05 seconds.
+- `npm run typecheck`: PASS.
+- `git diff --check`: PASS.
+- Workspace Chromium `debug.log`: absent after the final runs.
+- Delegated human release gate: GO for Task 4.
+- Independent TOCTOU code review: GO for Task 4.
+
 ## Release gate
 
 Pending. This section will be completed only after code freeze, artifact freeze, evidence regeneration, manifest generation, strict verification, fresh-clone verification, and GitHub CI for the exact final commit.

@@ -88,7 +88,18 @@ export const TargetDescriptor = z.object({
   quality: z.enum(['verified', 'partial', 'coordinate-only']).default('verified'),
   /** Why this targeting was chosen — surfaced to reviewers. */
   rationale: z.string().optional(),
-}).strict();
+}).strict().superRefine((target, ctx) => {
+  const framePath = target.scope.framePath ?? [];
+  for (const spec of [target.primary, ...target.fallbacks]) {
+    if (spec.kind !== 'coordinate') continue;
+    if (spec.space === 'viewport-grid' && framePath.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['scope', 'framePath'], message: 'viewport-grid coordinates require the main page surface' });
+    }
+    if (spec.space === 'viewport-grid' && (spec.x > 999 || spec.y > 999)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['primary'], message: 'viewport-grid coordinates must be in the 0..999 grid' });
+    }
+  }
+});
 export type TargetDescriptor = z.infer<typeof TargetDescriptor>;
 
 // ---------------------------------------------------------------------------
@@ -120,13 +131,26 @@ export type EnvBinding = z.infer<typeof EnvBinding>;
  */
 export const RecoverAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('navigate'), urlTemplate: z.string().min(1), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
-  z.object({ action: z.literal('click'), target: TargetDescriptor, riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
+  z.object({ action: z.literal('click'), target: TargetDescriptor, submission: z.enum(['NONE', 'SUBMIT']).optional(), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
   z.object({ action: z.literal('fill'), target: TargetDescriptor, valueTemplate: z.string().min(1), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
   z.object({ action: z.literal('select'), target: TargetDescriptor, optionTextTemplate: z.string().min(1), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
   z.object({ action: z.literal('wait'), durationMs: z.number().int().positive().max(30000), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
   /** Navigate the failed step's frame (or top) back to step.pageUrl. */
   z.object({ action: z.literal('gotoStepPage'), riskClass: z.enum(['safe', 'risky']), idempotent: z.boolean(), expectsDialog: z.boolean() }).strict(),
-]);
+]).superRefine((action, ctx) => {
+  if (action.action !== 'click') return;
+  const fingerprintSubmit = ['submit', 'image'].includes((action.target.fingerprint?.attributes?.type ?? '').toLowerCase());
+  if (fingerprintSubmit && action.submission !== 'SUBMIT') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['submission'], message: 'Recorded recovery submit controls must declare SUBMIT' });
+  }
+  if (action.submission === 'SUBMIT') {
+    const safeReadOnly = action.riskClass === 'safe' && action.idempotent === true;
+    const riskySideEffect = action.riskClass === 'risky' && action.idempotent === false;
+    if (!safeReadOnly && !riskySideEffect) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['idempotent'], message: 'Recovery SUBMIT must declare a consistent effect' });
+    }
+  }
+});
 export type RecoverAction = z.infer<typeof RecoverAction>;
 
 export const RecoverRule = z.object({
@@ -181,7 +205,9 @@ export const TableExtract = z.object({
     columnHeader: z.string().min(1),
     equalsTemplate: z.string().optional(),
     containsTemplate: z.string().optional(),
-  }).strict(),
+  }).strict().refine((row) => Boolean(row.equalsTemplate || row.containsTemplate), {
+    message: 'table extraction requires a declared unique row key',
+  }),
   columnHeader: z.string().min(1),
 }).strict();
 
@@ -207,6 +233,8 @@ export const Step = z.object({
   pageUrl: z.string().optional(),
   selectOptionText: z.string().optional(),
   keyCombo: z.string().optional(),
+  /** Explicit semantic distinction between a physical Enter and form submit. */
+  submission: z.enum(['NONE', 'SUBMIT']).optional(),
   /** Explicit wait duration used by guarded recovery wait actions. */
   waitDurationMs: z.number().int().positive().max(30000).optional(),
   scrollDirection: z.enum(['up', 'down']).optional(),
@@ -228,7 +256,27 @@ export const Step = z.object({
   // extract-only fields:
   outputKey: z.string().optional(),
   extract: z.union([TableExtract, TextExtract]).optional(),
-}).strict();
+}).strict().superRefine((step, ctx) => {
+  const enterPress = step.action === 'press' && /^Enter$/i.test(step.keyCombo?.trim() ?? '');
+  const fingerprintSubmit = step.action === 'click' &&
+    ['submit', 'image'].includes((step.target?.fingerprint?.attributes?.type ?? '').toLowerCase());
+  if (enterPress && step.submission !== 'SUBMIT') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['submission'], message: 'Enter presses must declare submission SUBMIT' });
+  }
+  if (fingerprintSubmit && step.submission !== 'SUBMIT') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['submission'], message: 'Recorded submit controls must declare submission SUBMIT' });
+  }
+  if (step.submission === 'SUBMIT') {
+    if (!((step.action === 'press' && enterPress) || step.action === 'click')) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['action'], message: 'SUBMIT is only valid for an Enter press or submit-control click' });
+    }
+    const safeReadOnlySubmit = step.riskClass === 'safe' && step.idempotent === true;
+    const riskySubmit = step.riskClass === 'risky' && step.idempotent === false;
+    if (!safeReadOnlySubmit && !riskySubmit) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['idempotent'], message: 'SUBMIT must be either safe+idempotent (read-only) or risky+non-idempotent' });
+    }
+  }
+});
 export type Step = z.infer<typeof Step>;
 
 // ---------------------------------------------------------------------------

@@ -211,12 +211,21 @@ export async function resolveDescriptor(
   opts: { timeoutMs?: number; skipCoordinateFallback?: boolean } = {}
 ): Promise<ResolutionOutcome> {
   const timeoutMs = opts.timeoutMs ?? 8000;
-  const frame = resolveFrameByPath(page, desc.scope.framePath ?? []);
+  const frame = resolveFrameByPathStrict(page, desc.scope.framePath ?? []);
+  if (!frame) {
+    return {
+      status: 'not-found',
+      usedFallbackIndex: null,
+      degraded: true,
+      attempts: [{ spec: desc.primary, why: 'FRAME_NOT_FOUND: declared frame path is absent' }],
+    };
+  }
   const root: Frame | Locator = desc.scope.container
     ? translateSpec(frame, desc.scope.container)
     : frame;
 
   const attempts: ResolutionOutcome['attempts'] = [];
+  let ambiguous = false;
   const specs: Array<{ spec: LocatorSpec | null; label: string }> = [
     { spec: desc.primary, label: 'primary' },
     ...desc.fallbacks.map((f) => ({ spec: f, label: 'fallback' })),
@@ -229,6 +238,10 @@ export async function resolveDescriptor(
     if (!spec) continue;
     if (spec.kind === 'coordinate') {
       if (opts.skipCoordinateFallback) continue;
+      if (ambiguous) {
+        attempts.push({ spec, why: 'coordinate fallback refused after ambiguous semantic match' });
+        continue;
+      }
       attempts.push({ spec, why: 'coordinate last resort' });
       return {
         status: 'coordinate-fallback',
@@ -241,15 +254,27 @@ export async function resolveDescriptor(
       const loc = translateSpec(root as Frame, spec);
       // Ambiguity rejection: count matches BEFORE acting. A selector that
       // matches >1 elements is ambiguous — even if the first looks right.
-      const count = await loc.count();
+      let count = await loc.count();
       if (count === 0) {
         await loc.first().waitFor({ state: 'visible', timeout: timeoutMs });
+        count = await loc.count();
       }
       if (count > 1) {
+        ambiguous = true;
         attempts.push({ spec, why: `AMBIGUOUS: ${count} matches` });
         continue;
       }
+      if (count === 0) {
+        attempts.push({ spec, why: 'ELEMENT_NOT_FOUND: zero matches after wait' });
+        continue;
+      }
       await loc.first().waitFor({ state: 'visible', timeout: timeoutMs });
+      count = await loc.count();
+      if (count !== 1) {
+        if (count > 1) ambiguous = true;
+        attempts.push({ spec, why: count > 1 ? `AMBIGUOUS: ${count} matches after wait` : 'ELEMENT_NOT_FOUND: disappeared after wait' });
+        continue;
+      }
       if (desc.fingerprint) {
         const score = await scoreAgainstFingerprint(loc.first(), desc.fingerprint);
         if (score >= FP_PASS_SCORE) {

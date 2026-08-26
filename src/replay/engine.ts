@@ -14,21 +14,15 @@ import {
   type Step,
 } from '../core/artifact.js';
 import type { AgentAction } from '../core/actions.js';
-import type { Locator } from 'playwright';
+import type { ElementHandle, Locator } from 'playwright';
 import { interpolate, resolveDescriptor, idPatternMatches } from '../surface/targeting.js';
 import { resolveFrameByPathStrict } from '../surface/targeting.js';
-import { gridToPx } from '../surface/driver.js';
+import { gridToPx, type SurfaceActionGuard } from '../surface/driver.js';
 
 function resolveFrameByPathPublic(page: import('playwright').Page, path: string[]): import('playwright').Frame | null {
   return resolveFrameByPathStrict(page, path);
 }
-function gridToPxViewport(x999: number, y999: number): { x: number; y: number } {
-  return {
-    x: Math.max(0, Math.min(1439, Math.round((x999 / 999) * 1439))),
-    y: Math.max(0, Math.min(899, Math.round((y999 / 999) * 899))),
-  };
-}
-import { openRunContext, runCheck, extractStepOutput, validateOutputs, artifactPreflight, templateCtx, globMatch, errorClassOf, classifyPhase, shortMsg, describeCheck, describeExtract, matchBusinessOutcome, type Ctx, type ReplayOptions } from './support.js';
+import { openRunContext, runCheck, extractStepOutput, validateOutputs, artifactPreflight, templateCtx, globMatch, errorClassOf, classifyPhase, shortMsg, describeCheck, describeExtract, matchBusinessOutcome, targetSurfaceFailure, checkSurfaceFailure, type Ctx, type ReplayOptions } from './support.js';
 
 function writeEvidence(ctx: Ctx, event: Record<string, unknown>): void {
   try {
@@ -48,9 +42,10 @@ async function performDriverAction(
   action: AgentAction,
   stepId: string,
   execution: { mode: string; attempt: number },
-  expectsDialog = false
+  expectsDialog = false,
+  guard?: SurfaceActionGuard
 ): Promise<void> {
-  const outcome = await ctx.driver.act(action);
+  const outcome = await ctx.driver.act(action, guard);
   if (outcome.events.length > 0) {
     writeEvidence(ctx, { type: 'surface_events', stepId, mode: execution.mode, attempt: execution.attempt, events: outcome.events });
   }
@@ -64,6 +59,34 @@ async function performDriverAction(
   if (lateEvents.length > 0) {
     writeEvidence(ctx, { type: 'surface_events', stepId, mode: execution.mode, attempt: execution.attempt, events: lateEvents });
   }
+}
+
+async function resolvedSubmitControl(element: ElementHandle<Element>): Promise<boolean> {
+  return element.evaluate((el) => {
+    const tag = el.tagName.toLowerCase();
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    return (tag === 'input' && (type === 'submit' || type === 'image')) ||
+      (tag === 'button' && (type === 'submit' || (type === '' && (el as HTMLButtonElement).form !== null)));
+  }).catch(() => false);
+}
+
+async function submitControlAtPoint(
+  frame: import('playwright').Frame,
+  point: { x: number; y: number }
+): Promise<boolean> {
+  return frame.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return false;
+    const tag = el.tagName.toLowerCase();
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    return (tag === 'input' && (type === 'submit' || type === 'image')) ||
+      (tag === 'button' && (type === 'submit' || (type === '' && (el as HTMLButtonElement).form !== null)));
+  }, point).catch(() => false);
+}
+
+function validSubmitEffect(step: Step): boolean {
+  return (step.riskClass === 'risky' && step.idempotent === false) ||
+    (step.riskClass === 'safe' && step.idempotent === true);
 }
 
 export async function replayCapability(
@@ -96,6 +119,9 @@ export async function replayCapability(
     } else {
       try {
         await performDriverAction(ctx, { type: 'navigate', url: entryUrl }, 'entry', { mode: 'normal', attempt: 1 });
+        if (!ctx.policy.isUrlAllowed(ctx.driver.page.url())) {
+          throw Object.assign(new Error(`entry redirected outside allowlist: ${ctx.driver.page.url()}`), { deftClass: 'POLICY_BLOCKED' });
+        }
       } catch (err) {
         status = 'FAILED';
         failure = { stepId: 'entry', phase: 'act', errorClass: errorClassOf(err), expected: entryUrl, observed: shortMsg(err), evidenceRefs: [] };
@@ -139,6 +165,15 @@ export async function replayCapability(
 
     if (status === 'SUCCESS') {
       for (const chk of artifact.successCondition.allOf) {
+        const surfaceFailure = checkSurfaceFailure(ctx, chk);
+        if (surfaceFailure) {
+          status = 'FAILED';
+          failure = {
+            stepId: 'successCondition', phase: 'verify', errorClass: surfaceFailure,
+            expected: describeCheck(chk), observed: 'target surface unavailable or outside allowlist', evidenceRefs: [],
+          };
+          break;
+        }
         const ok = await runCheck(ctx, artifact, opts, chk);
         ctx.evidence.write({ type: 'final_check', assert: chk.assert, ok });
         if (!ok) {
@@ -316,6 +351,9 @@ async function runStep(
           dispatchState = 'in-flight';
           await performDriverAction(ctx, { type: 'navigate', url }, step.id, { mode, attempt });
           dispatchState = 'completed';
+          if (!ctx.policy.isUrlAllowed(ctx.driver.page.url())) {
+            return fail(ctx, step, 'act', 'POLICY_BLOCKED', url, `redirected outside allowlist: ${ctx.driver.page.url()}`, []);
+          }
         }
         break;
       }
@@ -330,10 +368,36 @@ async function runStep(
         if ('outcome' in located) return located.outcome;
 
         if (located.mode === 'coordinate') {
+          if (located.submitControl && step.submission !== 'SUBMIT') {
+            return fail(ctx, step, 'act', 'ARTIFACT_INVALID', 'coordinate submit with explicit SUBMIT metadata', 'coordinate hit-test resolved a form submit control without submission semantics', []);
+          }
+          if (located.submitControl && !validSubmitEffect(step)) {
+            return fail(ctx, step, 'act', 'ARTIFACT_INVALID', 'consistent SUBMIT effect metadata', 'coordinate submit metadata does not match risk/idempotence', []);
+          }
+          if (!located.submitControl && step.submission === 'SUBMIT') {
+            return fail(ctx, step, 'act', 'ARTIFACT_INVALID', 'coordinate resolving to a submit control', 'SUBMIT coordinate no longer resolves to a submit control', []);
+          }
+          const coordinateFrame = step.target.scope.framePath?.length
+            ? resolveFrameByPathStrict(ctx.driver.page, step.target.scope.framePath)
+            : ctx.driver.page.mainFrame();
+          if (!coordinateFrame) return fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', 'declared coordinate frame', 'frame disappeared before dispatch', []);
+          if (!ctx.policy.isUrlAllowed(coordinateFrame.url())) {
+            return fail(ctx, step, 'act', 'POLICY_BLOCKED', coordinateFrame.url(), 'coordinate surface left policy before dispatch', []);
+          }
           if (step.expectsDialog) ctx.driver.acceptNextDialog();
           try {
             dispatchState = 'in-flight';
-            await performDriverAction(ctx, { type: 'click', hint: { px: located.px } }, step.id, { mode, attempt }, step.expectsDialog);
+            await performDriverAction(
+              ctx,
+              { type: 'click', hint: { px: located.px } },
+              step.id,
+              { mode, attempt },
+              step.expectsDialog,
+              {
+                framePath: step.target.scope.framePath ?? [],
+                isUrlAllowed: (url) => ctx.policy.isUrlAllowed(url),
+              }
+            );
             dispatchState = 'completed';
           } finally {
             ctx.driver.disarmNextDialog();
@@ -342,19 +406,51 @@ async function runStep(
         }
 
         const loc = located.locator!;
+        // Let delayed frame/top-level redirects settle before the final
+        // surface check. This closes the race where locate waits while the
+        // target silently crosses the origin boundary.
+        await ctx.driver.waitForLoadStateSettle();
+        const preActionFrame = step.target.scope.framePath?.length
+          ? resolveFrameByPathStrict(ctx.driver.page, step.target.scope.framePath)
+          : ctx.driver.page.mainFrame();
+        if (!preActionFrame) return fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', 'declared target frame', 'frame disappeared before action', []);
+        if (!ctx.policy.isUrlAllowed(preActionFrame.url())) return fail(ctx, step, 'act', 'POLICY_BLOCKED', preActionFrame.url(), 'target surface redirected before action', []);
+        // Pin the exact DOM node before the last policy check. Acting through
+        // the Locator here would allow Playwright to re-resolve it on a
+        // replacement document after the check (a TOCTOU escape). A pinned
+        // handle instead detaches and fails closed if navigation wins.
+        const element = await loc.elementHandle({ timeout: 12000 }).catch(() => null);
+        if (!element) return fail(ctx, step, 'locate', 'ELEMENT_NOT_FOUND', 'one live target element', 'target disappeared before dispatch', []);
         const c = templateCtx(artifact, opts, ctx);
+        const isSubmitControl = step.action === 'click' && await resolvedSubmitControl(element);
+        if (isSubmitControl && step.submission !== 'SUBMIT') {
+          return fail(ctx, step, 'act', 'ARTIFACT_INVALID', 'submit control with explicit SUBMIT metadata', 'resolved target is a form submit control without explicit submission semantics', []);
+        }
+        if (isSubmitControl && !validSubmitEffect(step)) {
+          return fail(ctx, step, 'act', 'ARTIFACT_INVALID', 'consistent SUBMIT effect metadata', 'submit metadata does not match its declared risk/idempotence', []);
+        }
+        if (step.submission === 'SUBMIT' && !isSubmitControl && step.action === 'click') {
+          return fail(ctx, step, 'act', 'ARTIFACT_INVALID', 'resolved submit control', 'SUBMIT metadata was declared for a non-submit target', []);
+        }
+        const dispatchFrame = step.target.scope.framePath?.length
+          ? resolveFrameByPathStrict(ctx.driver.page, step.target.scope.framePath)
+          : ctx.driver.page.mainFrame();
+        if (!dispatchFrame) return fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', 'declared target frame', 'frame disappeared before dispatch', []);
+        if (!ctx.policy.isUrlAllowed(dispatchFrame.url())) {
+          return fail(ctx, step, 'act', 'POLICY_BLOCKED', dispatchFrame.url(), 'target surface left policy before dispatch', []);
+        }
         if (step.expectsDialog) ctx.driver.acceptNextDialog();
         try {
           dispatchState = 'in-flight';
           if (step.action === 'click') {
-            await loc.click({ timeout: 12000 });
+            await element.click({ timeout: 12000 });
           } else if (step.action === 'fill') {
-            await loc.fill(interpolate(step.valueTemplate ?? '', c), { timeout: 10000 });
+            await element.fill(interpolate(step.valueTemplate ?? '', c), { timeout: 10000 });
           } else if (step.action === 'select') {
             const label = interpolate(step.selectOptionText ?? '', c);
-            await loc.selectOption({ label }).catch(() => loc.selectOption(label));
+            await element.selectOption({ label }).catch(() => element.selectOption(label));
           } else {
-            await loc.press(step.keyCombo ?? 'Enter');
+            await element.press(step.keyCombo ?? 'Enter');
           }
           dispatchState = 'completed';
           // Direct locator calls bypass driver.act(); settle while the
@@ -365,6 +461,16 @@ async function runStep(
           }
         } finally {
           ctx.driver.disarmNextDialog();
+          await element.dispose().catch(() => undefined);
+        }
+        const activeFrame = step.target.scope.framePath?.length
+          ? resolveFrameByPathStrict(ctx.driver.page, step.target.scope.framePath)
+          : ctx.driver.page.mainFrame();
+        if (!activeFrame) {
+          throw Object.assign(new Error('declared target frame disappeared after action'), { deftClass: 'FRAME_NOT_FOUND' });
+        }
+        if (!ctx.policy.isUrlAllowed(activeFrame.url())) {
+          throw Object.assign(new Error(`target surface redirected outside allowlist: ${activeFrame.url()}`), { deftClass: 'POLICY_BLOCKED' });
         }
         // A click that "worked" may still have landed on a session-expiry
         // redirect inside a frame — surface it so recovery can fire.
@@ -392,6 +498,12 @@ async function runStep(
         break;
       case 'extract': {
         dispatchState = 'in-flight';
+        const surfaceFailure = targetSurfaceFailure(ctx, step.extract?.strategy === 'tableCell'
+          ? { scope: step.extract.scope }
+          : step.extract?.target);
+        if (surfaceFailure) {
+          return fail(ctx, step, 'locate', surfaceFailure, 'allowed target surface', 'target surface unavailable or outside allowlist', []);
+        }
         const value = await extractStepOutput(ctx, artifact, opts, step);
         ctx.evidence.write({ type: 'extract', stepId: step.id, found: value != null });
         if (value == null) {
@@ -407,6 +519,8 @@ async function runStep(
       }
       case 'check': {
         dispatchState = 'postcheck-uncertain';
+        const surfaceFailure = checkSurfaceFailure(ctx, step.postCheck);
+        if (surfaceFailure) return fail(ctx, step, 'verify', surfaceFailure, describeCheck(step.postCheck), 'target surface unavailable or outside allowlist', []);
         const ok = await runCheck(ctx, artifact, opts, step.postCheck);
         if (!ok) {
           const ref = await shot(ctx, `fail-check-${step.id}`);
@@ -424,6 +538,8 @@ async function runStep(
 
     if (step.postCheck && step.action !== 'check') {
       dispatchState = 'postcheck-uncertain';
+      const surfaceFailure = checkSurfaceFailure(ctx, step.postCheck);
+      if (surfaceFailure) return fail(ctx, step, 'verify', surfaceFailure, describeCheck(step.postCheck), 'target surface unavailable or outside allowlist', []);
       const ok = await runCheck(ctx, artifact, opts, step.postCheck);
       if (!ok) {
         const probe = await pageProbe(ctx);
@@ -562,7 +678,7 @@ async function reconstructAndRetry(
 
 type LocateOutcome =
   | { mode: 'locator'; locator: Locator }
-  | { mode: 'coordinate'; px: { x: number; y: number } }
+  | { mode: 'coordinate'; px: { x: number; y: number }; submitControl: boolean }
   | { outcome: StepOutcome };
 
 async function locate(
@@ -575,6 +691,14 @@ async function locate(
   // Frameset reality: the top URL can stay on an allowed page while a frame
   // redirects somewhere else — the frame's own URL is what must be policed.
   const fp = step.target!.scope.framePath ?? [];
+  const currentFrame = fp.length ? resolveFrameByPathStrict(ctx.driver.page, fp) : null;
+  if (fp.length && !currentFrame) {
+    return { outcome: fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', `frame path [${fp.join('>')}]`, 'frame missing', []) };
+  }
+  const currentSurfaceUrl = currentFrame?.url() ?? ctx.driver.page.url();
+  if (!currentSurfaceUrl || !ctx.policy.isUrlAllowed(currentSurfaceUrl)) {
+    return { outcome: fail(ctx, step, 'locate', 'POLICY_BLOCKED', `allowed target surface for ${step.id}`, `disallowed current surface: ${currentSurfaceUrl ?? 'missing frame'}`, []) };
+  }
   if (fp.length > 0) {
     const frame = resolveFrameByPathStrict(ctx.driver.page, fp);
     if (!frame) {
@@ -639,23 +763,53 @@ async function locate(
     });
     if (spec && spec.kind === 'coordinate') {
       ctx.degradedSteps.push(step.id);
-      // Coordinates are FRAME-LOCAL PIXELS (record-time center); translate
-      // through the frame's viewport origin.
       let px: { x: number; y: number } | null = null;
-      try {
-        const frame = resolveFrameByPathPublic(ctx.driver.page, step.target!.scope.framePath ?? []);
-        if (!frame) throw new Error('frame gone');
-        const fe = await frame.frameElement();
-        const box = await fe.asElement()?.boundingBox();
-        if (box) {
+      if (spec.space === 'viewport-grid') {
+        if ((step.target!.scope.framePath ?? []).length > 0) {
+          return { outcome: fail(ctx, step, 'locate', 'ARTIFACT_INVALID', 'viewport-grid with top-level scope', 'viewport-grid cannot target a declared child frame', []) };
+        }
+        const viewport = ctx.driver.page.viewportSize() ?? { width: 1440, height: 900 };
+        px = gridToPx(spec.x, spec.y, viewport);
+      } else {
+        // frame-px is strictly frame-local. A missing declared child frame is
+        // not permission to click the parent or reinterpret pixels globally.
+        const framePath = step.target!.scope.framePath ?? [];
+        if (framePath.length === 0) {
+          const viewport = ctx.driver.page.viewportSize() ?? { width: 1440, height: 900 };
+          if (spec.x >= viewport.width || spec.y >= viewport.height) {
+            const ref = await shot(ctx, `fail-coordinate-${step.id}`);
+            return { outcome: fail(ctx, step, 'locate', 'COORDINATE_OUT_OF_BOUNDS', 'live viewport bounds', `frame-px [${spec.x},${spec.y}] outside ${viewport.width}x${viewport.height}`, [ref]) };
+          }
+          px = { x: spec.x, y: spec.y };
+        } else {
+          const frame = resolveFrameByPathPublic(ctx.driver.page, framePath);
+          if (!frame) {
+            const ref = await shot(ctx, `fail-frame-${step.id}`);
+            return { outcome: fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', `frame path [${framePath.join('>')}]`, 'frame missing for frame-px coordinate', [ref]) };
+          }
+          const fe = await frame.frameElement();
+          const box = await fe.asElement()?.boundingBox();
+          if (!box) {
+            const ref = await shot(ctx, `fail-frame-${step.id}`);
+            return { outcome: fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', `frame path [${framePath.join('>')}]`, 'frame has no viewport box', [ref]) };
+          }
+          if (spec.x >= box.width || spec.y >= box.height) {
+            const ref = await shot(ctx, `fail-coordinate-${step.id}`);
+            return { outcome: fail(ctx, step, 'locate', 'COORDINATE_OUT_OF_BOUNDS', 'declared frame bounds', `frame-px [${spec.x},${spec.y}] outside ${Math.round(box.width)}x${Math.round(box.height)}`, [ref]) };
+          }
           px = { x: Math.round(box.x + spec.x), y: Math.round(box.y + spec.y) };
         }
-      } catch {
-        /* fall through to viewport guess */
       }
-      if (!px) px = gridToPxViewport(spec.x, spec.y);
+      const coordinateFrame = spec.space === 'viewport-grid'
+        ? ctx.driver.page.mainFrame()
+        : resolveFrameByPathStrict(ctx.driver.page, step.target!.scope.framePath ?? []);
+      if (!coordinateFrame) {
+        return { outcome: fail(ctx, step, 'locate', 'FRAME_NOT_FOUND', 'coordinate target frame', 'frame missing before coordinate hit-test', []) };
+      }
+      const localPoint = spec.space === 'viewport-grid' ? px : { x: spec.x, y: spec.y };
+      const submitControl = await submitControlAtPoint(coordinateFrame, localPoint);
       ctx.evidence.write({ type: 'coordinate_click_viewport', stepId: step.id, px });
-      return { mode: 'coordinate', px };
+      return { mode: 'coordinate', px, submitControl };
     }
   }
   const ref = await shot(ctx, `fail-locate-${step.id}`);
@@ -764,6 +918,7 @@ async function runRecoveryActions(
       target: 'target' in act ? act.target : undefined,
       valueTemplate: act.action === 'navigate' ? act.urlTemplate : act.action === 'gotoStepPage' ? step.pageUrl : act.action === 'fill' ? act.valueTemplate : undefined,
       selectOptionText: act.action === 'select' ? act.optionTextTemplate : undefined,
+      submission: act.action === 'click' ? act.submission : undefined,
       waitDurationMs: act.action === 'wait' ? act.durationMs : undefined,
       pageUrl: step.pageUrl,
       recoverableErrors: [],
@@ -912,9 +1067,13 @@ async function pageProbe(ctx: Ctx): Promise<{ pageText?: string; dialogText?: st
     // Frameset reality: the top document's body is EMPTY — text lives in
     // frames. Aggregate every frame's visible text for pattern checks.
     const parts: string[] = [];
-    for (const f of ctx.driver.page.frames()) {
+    for (const f of ctx.driver.page.frames().filter((frame) => ctx.policy.isUrlAllowed(frame.url()))) {
       const t = await f.locator('body').innerText({ timeout: 1500 }).catch(() => '');
+      if (!ctx.policy.isUrlAllowed(f.url())) return { url: ctx.driver.page.url() };
       if (t) parts.push(t);
+    }
+    if (ctx.driver.page.frames().some((frame) => frame.url() && !/^about:blank$/i.test(frame.url()) && !ctx.policy.isUrlAllowed(frame.url()))) {
+      return { url: ctx.driver.page.url() };
     }
     const body = parts.join('\n');
     const dialogs = ctx.driver.drainEvents().filter((e) => e.kind === 'dialog');
